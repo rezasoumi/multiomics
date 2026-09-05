@@ -18,6 +18,8 @@ from multiomics.code.method1_predictability.model import SharedAndSpecificEmbedd
 
 warnings.filterwarnings('ignore')
 
+NUM_CLUST = {'lihc': 2, 'coad': 4, 'kirc': 2, 'brca': 5}
+
 
 def setup_seed(seed):
     torch.manual_seed(seed)
@@ -26,30 +28,32 @@ def setup_seed(seed):
     np.random.seed(seed)
 
 
-def main(args):
-    method = 'Method1Predictability'
-    disease = args.disease
-    num_clust = {'lihc': 2, 'coad': 4, 'kirc': 2, 'brca': 5}[disease]
+def _truth_from_label(disease, label):
+    if disease == 'coad':
+        return label.flatten().astype('int')
+    if disease == 'lihc':
+        lst = label[:, 0].flatten()
+        unique_vals = list(set(lst))
+        mapping = {val: idx for idx, val in enumerate(unique_vals)}
+        return np.asarray([mapping[val] for val in lst])
+    if disease == 'kirc':
+        return label[:, 1].flatten().astype('int')
+    return label.flatten()
 
+
+def evaluate_config(disease, config_dir, plot=False):
+    """
+    Evaluate one trained config folder.
+    Returns a metrics dict (nmi, ari, f_score, acc, v_measure, ch_index, knn_acc).
+    """
+    num_clust = NUM_CLUST[disease]
     view1_data, view2_data, view3_data, _, _ = load_data(disease)
 
-    parent = '../../results/models_{}_method1'.format(disease)
-    ls = [{'loss': 1e12, 'config': None}]
-    if os.path.isdir(parent):
-        for config in os.listdir(parent):
-            f = os.path.join(parent, config, 'loss.npy')
-            if os.path.exists(f):
-                ls.append({'loss': float(np.load(f)), 'config': config})
-    best = min(ls, key=lambda x: x['loss'])
-    if best['config'] is None:
-        raise FileNotFoundError('No trained Method 1 models under {}'.format(parent))
-
-    folder = args.config if args.config else best['config']
-    desired_path = os.path.join(parent, folder)
-    print('Using config:', folder)
-
-    data = np.load(desired_path + '/test_data_{}.npy'.format(disease))
-    label = np.load(desired_path + '/test_label_{}.npy'.format(disease), allow_pickle=True)
+    data = np.load(os.path.join(config_dir, 'test_data_{}.npy'.format(disease)))
+    label = np.load(
+        os.path.join(config_dir, 'test_label_{}.npy'.format(disease)),
+        allow_pickle=True,
+    )
 
     model = SharedAndSpecificEmbedding(
         view_size=[view1_data.shape[1], view2_data.shape[1], view3_data.shape[1]],
@@ -58,9 +62,8 @@ def main(args):
         n_units_3=[256, 128, 64, 32],
         mlp_size=[32, 8],
     )
-    model.load_state_dict(
-        torch.load(desired_path + '/model_{}'.format(disease), map_location='cpu')
-    )
+    model_path = os.path.join(config_dir, 'model_{}'.format(disease))
+    model.load_state_dict(torch.load(model_path, map_location='cpu'))
     model.eval()
     setup_seed(2)
 
@@ -82,34 +85,69 @@ def main(args):
         dim=1,
     ).numpy()
 
-    if disease == 'coad':
-        truth = label.flatten().astype('int')
-    elif disease == 'lihc':
-        lst = label[:, 0].flatten()
-        unique_vals = list(set(lst))
-        mapping = {val: idx for idx, val in enumerate(unique_vals)}
-        truth = np.asarray([mapping[val] for val in lst])
-    elif disease == 'kirc':
-        truth = label[:, 1].flatten().astype('int')
-    else:
-        truth = label.flatten()
+    truth = _truth_from_label(disease, label)
+    if plot:
+        util.plot_with_path(
+            final_embedding, truth, os.path.join(config_dir, 'final_em'), 'Method1Predictability'
+        )
 
-    util.plot_with_path(final_embedding, truth, desired_path + '/final_em', method)
     km = KMeans(n_clusters=num_clust, random_state=42)
     y_pred = km.fit_predict(final_embedding)
     nmi_, ari_, f_score_, acc_, v_, ch = evaluation.evaluate(truth, y_pred)
-    print(
-        '\n' + ' ' * 8
-        + '|==>  nmi: %.4f,  ari: %.4f,  f_score: %.4f,  acc: %.4f,  v_measure: %.4f,  '
-          'ch_index: %.4f  <==|' % (nmi_, ari_, f_score_, acc_, v_, ch)
-    )
 
-    X_train, X_test, y_train, y_test = train_test_split(
+    X_tr, X_te, y_tr, y_te = train_test_split(
         final_embedding, truth, test_size=0.25, random_state=12
     )
     knn = KNeighborsClassifier(n_neighbors=num_clust)
-    knn.fit(X_train, y_train)
-    print('kNN acc: {:.2f}'.format(accuracy_score(y_test, knn.predict(X_test))))
+    knn.fit(X_tr, y_tr)
+    knn_acc = float(accuracy_score(y_te, knn.predict(X_te)))
+
+    return {
+        'nmi': float(nmi_),
+        'ari': float(ari_),
+        'f_score': float(f_score_),
+        'acc': float(acc_),
+        'v_measure': float(v_),
+        'ch_index': float(ch),
+        'knn_acc': knn_acc,
+    }
+
+
+def main(args):
+    disease = args.disease
+    parent = '../../results/models_{}_method1'.format(disease)
+
+    if args.config:
+        folder = args.config
+    else:
+        ls = [{'loss': 1e12, 'config': None}]
+        if os.path.isdir(parent):
+            for config in os.listdir(parent):
+                f = os.path.join(parent, config, 'loss.npy')
+                if os.path.exists(f):
+                    ls.append({'loss': float(np.load(f)), 'config': config})
+        best = min(ls, key=lambda x: x['loss'])
+        if best['config'] is None:
+            raise FileNotFoundError('No trained Method 1 models under {}'.format(parent))
+        folder = best['config']
+
+    desired_path = os.path.join(parent, folder)
+    print('Using config:', folder)
+    metrics = evaluate_config(disease, desired_path, plot=True)
+    print(
+        '\n' + ' ' * 8
+        + '|==>  nmi: %.4f,  ari: %.4f,  f_score: %.4f,  acc: %.4f,  v_measure: %.4f,  '
+          'ch_index: %.4f  <==|'
+        % (
+            metrics['nmi'],
+            metrics['ari'],
+            metrics['f_score'],
+            metrics['acc'],
+            metrics['v_measure'],
+            metrics['ch_index'],
+        )
+    )
+    print('kNN acc: {:.2f}'.format(metrics['knn_acc']))
 
 
 if __name__ == '__main__':
