@@ -14,8 +14,8 @@ def train(train_loader, view1_data, view2_data, model, loss_function, temperatur
         view3_train_data = torch.tensor(view3_train_data).clone().detach()
 
         if USE_GPU:
-            view1_train_data, view2_train_data, view3_train_data = Variable(view1_train_data.cuda()), Variable(
-                view2_train_data.cuda()), Variable(view3_train_data.cuda())
+            view1_train_data, view2_train_data, view3_train_data = Variable(view1_train_data.float().cuda()), Variable(
+                view2_train_data.float().cuda()), Variable(view3_train_data.float().cuda())
         else:
             view1_train_data = Variable(view1_train_data).type(torch.FloatTensor)
             view2_train_data = Variable(view2_train_data).type(torch.FloatTensor)
@@ -28,6 +28,10 @@ def train(train_loader, view1_data, view2_data, model, loss_function, temperatur
             view3_shared_mlp = model(view1_train_data, view2_train_data, view3_train_data)
 
         prior_alpha = torch.Tensor(1, 8).float().fill_(.5)
+        if USE_GPU:
+            prior_alpha = prior_alpha.cuda()
+        else:
+            prior_alpha = prior_alpha.cpu()
 
         params = (prior_alpha, view1_train_data, view2_train_data, view3_train_data, # For Blie version
                   view1_shared_em, view2_shared_em, view3_shared_em,

@@ -19,7 +19,7 @@ def variational_encoder_decoder(layers, input_data):
         concentration_params.append(a)
     size = list(concentration_params[0].size())
     x, y = size[0], size[1]
-    em_normalized = torch.zeros(x, y, K)
+    em_normalized = torch.zeros(x, y, K, device=input_data.device)
     alphas = torch.stack(concentration_params)  # 10 * (1 + F.relu(torch.stack(concentration_params)))
 
     alphas_pos = []
@@ -28,7 +28,7 @@ def variational_encoder_decoder(layers, input_data):
         for k in range(K):
             alpha_positive = F.sigmoid(alphas[k, j, :])
             alphas_pos.append(alpha_positive)
-            u = torch.rand(alpha_positive.shape)
+            u = torch.rand(alpha_positive.shape, device=input_data.device)
             temp = u.mul(alpha_positive).mul(torch.exp(lgamma(alpha_positive)))
             em = torch.pow(temp, torch.pow(alpha_positive, -1))
             #### the below has the same value as F.softmax(em) but we do below since we need em to be distributed as Dir
