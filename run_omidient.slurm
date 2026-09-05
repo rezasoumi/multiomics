@@ -15,7 +15,7 @@ module load scicomp-pytorch-env
 SCRATCH=/scratch/work/soumir1
 export PYTHONPATH=${SCRATCH}
 
-source ${SCRATCH}/githubmultiomics/venv/bin/activate
+source ${SCRATCH}/multiomics/venv/bin/activate
 
 cd ${SCRATCH}/githubmultiomics/code/prod_gamma_dirvae
 mkdir -p ../../results ../../logs
