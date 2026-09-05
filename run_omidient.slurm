@@ -17,7 +17,7 @@ export PYTHONPATH=${SCRATCH}
 
 source ${SCRATCH}/multiomics/venv/bin/activate
 
-cd ${SCRATCH}/githubmultiomics/code/prod_gamma_dirvae
+cd ${SCRATCH}/githubmultiomics/multiomics/code/prod_gamma_dirvae
 mkdir -p ../../results ../../logs
 
 echo "=== Training OMIDIENT (ProdGammaDirVae) ==="
