@@ -15,9 +15,9 @@ module load scicomp-pytorch-env
 SCRATCH=/scratch/work/soumir1
 export PYTHONPATH=${SCRATCH}
 
-source ${SCRATCH}/multiomics/venv/bin/activate
+source ${SCRATCH}/githubmultiomics/venv/bin/activate
 
-cd ${SCRATCH}/multiomics/code/prod_gamma_dirvae
+cd ${SCRATCH}/githubmultiomics/code/prod_gamma_dirvae
 mkdir -p ../../results ../../logs
 
 echo "=== Training OMIDIENT (ProdGammaDirVae) ==="
