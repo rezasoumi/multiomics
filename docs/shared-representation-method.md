@@ -52,96 +52,107 @@ OMIDIENT adds Dirichlet structure only to the **private** branch (`prodDirVae.va
 ```
 X_m → Enc → P_m, S_m   (per modality)
 
-Decoder_m:  
-D_m(P_m, S_m) → X̂_m (should predict)
-D_m(P_m', P_m'') → X̂_m (should not predict)
-D_m(S_m', S_m'') → X̂_m (should predict)
+Predictors for target modality m (separate networks h, f, g, k):
+  h_m(P_m, S_m)       → X̂_m   (should predict)       # within-view recon
+  f_m(S_m', S_m'')    → X̂_m   (should predict)       # cross-shared sufficiency
+  g_m(P_m', P_m'')    → X̂_m   (should NOT predict)   # cross-private adversary
+  k_m(S_m)            → X̂_m   (should NOT predict)   # own-shared insufficiency
 
-Build shared-info matrices C_m from {S_m} (per modality)
-Take selected rows (3 modalities, so 3 rows) → MLP (projection function) → contrastive loss (between these 3 rows)
+Keep shared embedding + MLP projection + contrastive (per modality):
+  S_1, S_2, S_3 → MLP → contrastive loss across the 3 projected rows
 ```
 
-Cross-reconstruction is the key structural change: modality `m` is rebuilt from **its own private and shared code plus the other modalities' shared codes**, not from `S_m` alone. Also, another decoder to reconstruct each modality from the private codes of other modality exists with a reverse loss term so that each modality won't be reconstructable using the other modalities' private codes.
+The key change vs MOCSS: drop solo `shared_rec` / `specific_rec`. Instead, each modality is explained by four predictability constraints—joint within-view reconstruction (`h`), cross-view shared sufficiency (`f`), cross-view private privacy (`g`), and own-shared insufficiency (`k`).
 
-### In another language: Predictability Surrogate
+### Predictability Surrogate
 
-For target modality `A`, define three predictors:
-
-
-| Network | Input      | Target | Role                                                                                                                                             |
-| ------- | ---------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| h_A     | (P_A, S_A) | X_A    | Standard within-view reconstruction                                                                                                              |
-| f_A     | (S_B, S_C) | X_A    | **Shared sufficiency**: other views' shared codes should predict A (not as close as h_A though, this is handled via the hyperparameters α and β) |
-| g_A     | (P_B, P_C) | X_A    | **Private adversary**: other views' private codes should **not** predict A                                                                       |
+For target modality `A`, define four predictors:
 
 
+| Network | Input      | Target | Role                                                                                                                                                |
+| ------- | ---------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| h_A     | (P_A, S_A) | X_A    | Standard within-view reconstruction                                                                                                                 |
+| f_A     | (S_B, S_C) | X_A    | **Shared sufficiency**: other views' shared codes should predict A (how strongly is controlled by α)                                                |
+| g_A     | (P_B, P_C) | X_A    | **Private adversary**: other views' private codes should **not** predict A                                                                          |
+| k_A     | S_A        | X_A    | **Own-shared insufficiency**: own shared code alone should **not** fully reconstruct A (private residual must live in P_A so that h_A can still succeed) |
 
 
-### Loss Function
+Together: shared content is pushed into `S` and out of foreign `P` (`f` + `g`), while private-to-A content is discouraged from sitting in `S_A` alone (`k`) and recovered via `P_A` in `h_A`.
 
-**Total loss (per sample, summed over modalities) (for training all the networks except g_A):**
+### Loss Terms
 
 ```text
-L = Σ_A [ L_std^A + α·L_shared^A − β·L_adv^A ] + λ_ctr·L_contrastive
+L_std^A    = ‖ h_A(P_A, S_A) − X_A ‖
+L_shared^A = ‖ f_A(S_B, S_C) − X_A ‖
+L_adv^A    = ‖ g_A(P_B, P_C) − X_A ‖
+L_own^A    = ‖ k_A(S_A) − X_A ‖
 ```
 
-where typically:
+Do **not** optimize a single combined scalar with one joint `backward()` on adversaries. A naive `L = … − β·L_adv − γ·L_own` would also update `g`/`k` to increase their own error. Use the two-step procedure below.
+
+### Two-Step Training (per batch)
+
+**Step 1 — train adversaries only** (`g` and `k`; encoders / `h` / `f` frozen, stop-grad on their inputs `P` and `S`):
 
 ```text
-L_std    = ‖ h_A(P_A, S_A) − X_A ‖
-L_shared = ‖ f_A(S_B, S_C) − X_A ‖
-L_adv    = ‖ g_A(P_B, P_C) − X_A ‖
+L_step1 = Σ_A [ L_adv^A + L_own^A ]
 ```
 
-Loss function of g_A:
+Minimize `L_step1` w.r.t. `g` and `k` only.
+
+**Step 2 — train encoders and constructive predictors** (`h`, `f`, shared/private encoders, MLP heads; stop-grad through `g` and `k` parameters / detach adversary weights):
 
 ```text
-L = Σ_A L_adv^A
+L_step2 = Σ_A [ L_std^A + α·L_shared^A − β·L_adv^A − γ·L_own^A ] + λ_ctr·L_contrastive
 ```
 
-This separete g_A loss makes the minimax game situation so that the encoders try to put the informations into private codes that the decoder is not able to reconstruct the modality from that info.
+Minimize `L_step2` w.r.t. encoders, `h`, and `f` only.
 
-The **minus sign on L_adv** makes training a minimax-style game: encoders try to make cross-view private codes uninformative about X_A, while g_A tries to predict anyway (gradient reversal or alternating updates).
+Interpretation of the minus signs in step 2: encoders try to make `(P_B, P_C)` uninformative about `X_A` and make `S_A` alone insufficient for full `X_A`, while step 1 keeps `g`/`k` competent predictors. Keep `γ` modest so `k` removes private bleed from `S` without wiping the shared signal that `f` and contrastive need.
 
-The best α and β should be obtained in the hyperparamter search. (For the sake of simplicity, we can also set a set for each, such as [0.4, ,0.7, 1, 1.5, 2])
+Hyperparameters `α`, `β`, `γ` (and `λ_ctr`) should be chosen by search. A simple grid for the predictability weights is e.g. `[0.4, 0.7, 1, 1.5, 2]`.
 
 ### Information-Theoretic Interpretation
 
 - **Minimize** L_shared → maximize I(X_A; S_B, S_C) → S captures cross-view predictable content
-- **Maximize** L_adv (via subtraction) → minimize I(X_A; P_B, P_C) → private codes of other views don't leak into A
-- **Cross-decoder** forces S_m to be useful *collectively*, not per-view redundant copies of full X_m
+- **Maximize** L_adv (via −β in step 2) → minimize I(X_A; P_B, P_C) → private codes of other views don't leak shared signal
+- **Maximize** L_own (via −γ in step 2) → minimize sufficiency of S_A alone for full X_A → private residual is pushed into P_A
+- **Minimize** L_std → (P_A, S_A) remain jointly sufficient for X_A
+- **Cross-view shared decoder** `f` forces S to be useful *collectively*, not a per-view full copy of X_m
 
-This is closer to **multi-view sufficiency + privacy** than orthogonality alone.
+This is closer to **multi-view sufficiency + privacy + own-shared insufficiency** than orthogonality alone.
 
 ### Advantages
 
 1. **Operational definition of "shared"**: what is predictable from other modalities' S, not what reconstructs locally.
-2. **Explicit anti-leakage** for private codes across views via adversarial term.
-3. **Cross-reconstruction** reduces incentive for S_m to duplicate P_m's job.
-4. **Theoretically defensible** in a thesis (sufficiency, minimal sufficient representation, adversarial privacy).
+2. **Explicit anti-leakage** for private codes across views via `g`.
+3. **Explicit own-shared insufficiency** via `k`: unlike MOCSS's solo `shared_rec`, own `S_A` is discouraged from fully reconstructing `X_A`.
+4. **Cross-reconstruction** (`f`) reduces incentive for S_m to duplicate only local detail.
+5. **Theoretically defensible** in a thesis (sufficiency, privacy, minimal shared representation).
 
 
 
 ### Concerns
 
 
-| Issue                               | Detail                                                                                                                 |
-| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| **9 extra networks**                | 3 modalities × (f, g, h) = 9 decoders/predictors on top of encoders—more parameters, tuning α, β, training instability |
-| **Minimax optimization**            | −β·L_adv can oscillate or collapse without GRL, careful β schedule, or stop-gradient on encoders                       |
-| **Shared may still encode private** | If f_A is weak, encoders can hide cross-view info in P_A and still satisfy h_A                                         |
-| **Matrix C^m design**               | Not in current code; must be defined and ablated                                                                       |
+| Issue                        | Detail                                                                                                                                     |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| **12 predictors**            | 3 modalities × (h, f, g, k) = 12 networks on top of encoders—more parameters; tune α, β, γ                                                 |
+| **Minimax / two-step**       | Needs the two-step (or GRL) procedure above; naive single backward on −L_adv/−L_own trains adversaries incorrectly; β, γ can still oscillate |
+| **Over-strong k**            | Large γ can strip shared content from S_A, not only private residual—monitor L_own vs L_shared and keep γ modest                           |
+| **Weak f or g**              | If f is weak, shared may underfit; if g is weak, −L_adv is vacuous                                                                         |
+| **Contrastive / projection** | MLP projection can still hide some private dims in S; k mitigates but does not prove purity                                                |
 
 
 
 
 ### Implementation Sketch
 
-1. **Keep** specific represenation's encoder and decoder producing P_m as is, and MLP projection heads from `SharedAndSpecificEmbedding`
-2. Extend `SharedAndSpecificEmbedding` so that for shared representation there will be two encoders and three decoders for each modality -> one encoder for shared representation and one encoder for private representation. One decoder for h_A, one for f_A, and one for g_A.
-3. **Extend** `SharedAndSpecificLoss` with L_std, α·L_shared, and −β·L_adv; drop solo `shared_rec` / `specific_rec` losses.
-4. **Keep** C^m, MLP projection heads, and contrastive loss as in MOCSS
-5. **Evaluation**: same `evaluation.py` pipeline on concatenated [P_1, P_2, P_3, S̄] as OMIDIENT does today
+1. **Base on MOCSS** (`SharedAndSpecificEmbedding` / `SharedAndSpecificLoss`): keep separate encoders for P_m and S_m, and MLP projection heads + contrastive loss.
+2. **Replace** solo `shared_rec` / `specific_rec` decoders with four predictors per modality: `h_A`, `f_A`, `g_A`, `k_A` (inputs as in the table above).
+3. **Loss / training**: implement the two-step procedure (`L_step1` for `g`/`k`, `L_step2` for encoders/`h`/`f` + contrastive); log each term separately.
+4. **Keep** contrastive on projected shared embeddings as in MOCSS.
+5. **Evaluation**: same `evaluation.py` pipeline on concatenated [P_1, P_2, P_3, S̄].
 
 ---
 
