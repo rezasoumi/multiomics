@@ -299,7 +299,7 @@ def main(args):
     )
     if USE_GPU:
         model = model.cuda()
-    model.load_state_dict(torch.load(desired_path + '/model_{}'.format(disease)))
+    model.load_state_dict(torch.load(desired_path + '/model_{}'.format(disease), map_location=torch.device('cpu')))
     model.eval()
 
     print(folder)
