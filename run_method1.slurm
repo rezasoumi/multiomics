@@ -13,17 +13,19 @@ module purge
 module load scicomp-pytorch-env
 
 SCRATCH=/scratch/work/soumir1
-export PYTHONPATH=${SCRATCH}
+REPO=${SCRATCH}/githubmultiomics/multiomics
+
+# Prefer the synced github copy (has method1_predictability); keep SCRATCH for any other deps
+export PYTHONPATH=${SCRATCH}/githubmultiomics:${SCRATCH}
 
 source ${SCRATCH}/multiomics/venv/bin/activate
 
-# Repo copy used for this project (same layout as run_omidient.slurm)
-REPO=${SCRATCH}/githubmultiomics/multiomics
 cd ${REPO}/code/method1_predictability
 mkdir -p ${REPO}/results ${REPO}/logs
 
 echo "=== Host: $(hostname)  CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-unset} ==="
-python -u -c "import torch; print('torch', torch.__version__, 'cuda', torch.cuda.is_available())"
+echo "=== PYTHONPATH=${PYTHONPATH} ==="
+python -u -c "import torch; import multiomics.code.method1_predictability.model as m; print('torch', torch.__version__, 'cuda', torch.cuda.is_available(), 'model_ok', m.__file__)"
 
 echo "=== Training Method 1 (predictability surrogate, MOCSS base) ==="
 python -u hyperparam_tuning.py --epochs 100 --batch-size 32
