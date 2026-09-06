@@ -34,9 +34,9 @@ python -u retrain_config.py \
   --batch-size 32 \
   --lr 0.0004 \
   --weight-decay 0.0007 \
-  --alpha 0.5 \
-  --beta 0.5 \
-  --gamma 2.5 \
+  --alpha 1.0 \
+  --beta 1.0 \
+  --gamma 1.0 \
   --lambda-ctr 1.0
 
 OUTDIR=${REPO}/results/models_brca_method1/0.0004_0.0007_a0.5_b0.5_g2.5_l1.0_full100
