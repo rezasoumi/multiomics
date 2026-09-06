@@ -22,7 +22,7 @@ from multiomics.code.method1_predictability.evaluate import evaluate_config
 warnings.filterwarnings('ignore')
 
 DISEASE = 'brca'
-USE_GPU = True
+USE_GPU = False
 SEED = 21
 
 
