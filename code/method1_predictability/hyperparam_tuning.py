@@ -199,7 +199,7 @@ def train_one(batch, epochs, lr, wd, alpha, beta, gamma, lambda_ctr):
             USE_GPU,
             epochs,
         )
-        loss_val = validation(
+        loss_val, constructive, _ = validation(
             val_loader,
             view1_data,
             view2_data,
@@ -212,11 +212,13 @@ def train_one(batch, epochs, lr, wd, alpha, beta, gamma, lambda_ctr):
         )
         print('epoch {0} done'.format(epoch))
 
-        if loss_val < loss_best:
-            loss_best = loss_val
+        # Checkpoint / early-stop on constructive val (std+α·shared+λ·ctr),
+        # not signed L_step2 (which is dominated by −β·adv −γ·own early on).
+        if constructive < loss_best:
+            loss_best = constructive
             best_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
 
-        if early_stopper.early_stop(loss_val):
+        if early_stopper.early_stop(constructive):
             print('Early stopping at epoch {}'.format(epoch))
             break
 

@@ -137,19 +137,43 @@ def validation(
     model.eval()
     total_loss = 0.0
     total = 0.0
+    sum_terms = {k: 0.0 for k in ('l_std', 'l_shared', 'l_adv', 'l_own', 'l_ctr')}
 
     with torch.no_grad():
         for val_batch in val_loader:
             view1, view2, view3 = _split_batch(val_batch, view1_data, view2_data, use_gpu)
             ori = {1: view1, 2: view2, 3: view3}
             out = model(view1, view2, view3)
-            loss2, _ = loss_function.step2_loss(out, ori, temperature)
+            loss2, terms = loss_function.step2_loss(out, ori, temperature)
             total += len(val_batch)
             total_loss += loss2.item()
+            for k in sum_terms:
+                sum_terms[k] += terms[k].item()
 
     res = total_loss / total
-    print('[Epoch: %3d/%3d] Validation Loss: %f' % (epoch + 1, total_epochs, res))
-    return res
+    avg_terms = {k: sum_terms[k] / total for k in sum_terms}
+    # Constructive score (no -adv/-own): safer for checkpointing than signed L_step2
+    constructive = (
+        avg_terms['l_std']
+        + loss_function.alpha * avg_terms['l_shared']
+        + loss_function.lambda_ctr * avg_terms['l_ctr']
+    )
+    print(
+        '[Epoch: %3d/%3d] Validation Loss: %f | constructive=%.4f std=%.4f shared=%.4f '
+        'adv=%.4f own=%.4f ctr=%.4f'
+        % (
+            epoch + 1,
+            total_epochs,
+            res,
+            constructive,
+            avg_terms['l_std'],
+            avg_terms['l_shared'],
+            avg_terms['l_adv'],
+            avg_terms['l_own'],
+            avg_terms['l_ctr'],
+        )
+    )
+    return res, constructive, avg_terms
 
 
 class EarlyStopper:
