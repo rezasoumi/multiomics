@@ -29,7 +29,7 @@ warnings.filterwarnings('ignore')
 disease = 'brca'
 EPOCHS = 100
 BATCH_SIZE = 32
-USE_GPU = True
+USE_GPU = False
 SEED = 21
 
 LR = {'brca': 0.0004, 'kirc': 0.0002, 'coad': 0.0002, 'lihc': 0.0002}[disease]
