@@ -30,10 +30,10 @@ echo "=== Grid: alpha={0.3,0.5,0.7,1.0,1.5} beta={0.5,0.7,1.0,1.5,2.0} lambda_vi
 echo "=== Fixed: lr/wd=MOCSS-brca, lambda_ctr=1.0, epochs=100 ==="
 echo "=== Checkpoint/early-stop on constructive = std+α·shared+λ_ctr·ctr+λ_vic·vic ==="
 
-python -u hyperparam_tuning.py --epochs 100 --batch-size 32 --resume --rank-metric knn_acc
+python -u hyperparam_tuning.py --epochs 100 --batch-size 32 --resume --rank-metric nmi
 
-echo "=== Final summarize (best by kNN acc) ==="
-python -u hyperparam_tuning.py --summarize-only --rank-metric knn_acc
+echo "=== Final summarize (best by NMI) ==="
+python -u hyperparam_tuning.py --summarize-only --rank-metric nmi
 
 echo "=== Best config ==="
 python -u -c "

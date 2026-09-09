@@ -33,10 +33,10 @@ echo "=== Fixed: lr/wd=MOCSS-brca defaults, lambda_ctr=1.0, epochs=100 ==="
 echo "=== Each config: train -> evaluate -> append leaderboard.csv; --resume skips done ==="
 
 # --resume makes the job safe to requeue if the walltime is hit
-python -u hyperparam_tuning.py --epochs 100 --batch-size 32 --resume --rank-metric knn_acc
+python -u hyperparam_tuning.py --epochs 100 --batch-size 32 --resume --rank-metric nmi
 
-echo "=== Final summarize (best by kNN acc) ==="
-python -u hyperparam_tuning.py --summarize-only --rank-metric knn_acc
+echo "=== Final summarize (best by NMI) ==="
+python -u hyperparam_tuning.py --summarize-only --rank-metric nmi
 
 echo "=== Best config details ==="
 python -u -c "
