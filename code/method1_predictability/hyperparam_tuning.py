@@ -91,7 +91,7 @@ def load_leaderboard_configs():
     return done
 
 
-def summarize_best(metric='nmi'):
+def summarize_best(metric='knn_acc'):
     path = leaderboard_path()
     if not os.path.exists(path):
         raise FileNotFoundError('No leaderboard at {}'.format(path))
@@ -358,7 +358,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--rank-metric',
         type=str,
-        default='nmi',
+        default='knn_acc',
         choices=['nmi', 'ari', 'acc', 'knn_acc', 'f_score'],
         help='Metric used to pick the best config',
     )
