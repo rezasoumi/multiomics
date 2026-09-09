@@ -69,11 +69,11 @@ The key change vs MOCSS: drop solo `shared_rec` / `specific_rec`. Instead, each 
 For target modality `A`, define four predictors:
 
 
-| Network | Input      | Target | Role                                                                                                                                                |
-| ------- | ---------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| h_A     | (P_A, S_A) | X_A    | Standard within-view reconstruction                                                                                                                 |
-| f_A     | (S_B, S_C) | X_A    | **Shared sufficiency**: other views' shared codes should predict A (how strongly is controlled by α)                                                |
-| g_A     | (P_B, P_C) | X_A    | **Private adversary**: other views' private codes should **not** predict A                                                                          |
+| Network | Input      | Target | Role                                                                                                                                                     |
+| ------- | ---------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| h_A     | (P_A, S_A) | X_A    | Standard within-view reconstruction                                                                                                                      |
+| f_A     | (S_B, S_C) | X_A    | **Shared sufficiency**: other views' shared codes should predict A (how strongly is controlled by α)                                                     |
+| g_A     | (P_B, P_C) | X_A    | **Private adversary**: other views' private codes should **not** predict A                                                                               |
 | k_A     | S_A        | X_A    | **Own-shared insufficiency**: own shared code alone should **not** fully reconstruct A (private residual must live in P_A so that h_A can still succeed) |
 
 
@@ -135,13 +135,13 @@ This is closer to **multi-view sufficiency + privacy + own-shared insufficiency*
 ### Concerns
 
 
-| Issue                        | Detail                                                                                                                                     |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| **12 predictors**            | 3 modalities × (h, f, g, k) = 12 networks on top of encoders—more parameters; tune α, β, γ                                                 |
+| Issue                        | Detail                                                                                                                                       |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| **12 predictors**            | 3 modalities × (h, f, g, k) = 12 networks on top of encoders—more parameters; tune α, β, γ                                                   |
 | **Minimax / two-step**       | Needs the two-step (or GRL) procedure above; naive single backward on −L_adv/−L_own trains adversaries incorrectly; β, γ can still oscillate |
-| **Over-strong k**            | Large γ can strip shared content from S_A, not only private residual—monitor L_own vs L_shared and keep γ modest                           |
-| **Weak f or g**              | If f is weak, shared may underfit; if g is weak, −L_adv is vacuous                                                                         |
-| **Contrastive / projection** | MLP projection can still hide some private dims in S; k mitigates but does not prove purity                                                |
+| **Over-strong k**            | Large γ can strip shared content from S_A, not only private residual—monitor L_own vs L_shared and keep γ modest                             |
+| **Weak f or g**              | If f is weak, shared may underfit; if g is weak, −L_adv is vacuous                                                                           |
+| **Contrastive / projection** | MLP projection can still hide some private dims in S; k mitigates but does not prove purity                                                  |
 
 
 
@@ -173,8 +173,8 @@ Decoder_m:  D_m(P_m, S_m) → X̂_m   (joint within-view reconstruction)
 
 Orthogonality loss between P_m and S_m (per modality)
 
-Build shared-info matrices C_ from {S_m}
-Take selected rows (3 modalities, so 3 rows) → MLP (projection function) → contrastive loss (between these 3 rows)
+Keep shared embedding + MLP projection + contrastive (per modality):
+  S_1, S_2, S_3 → MLP → contrastive loss across the 3 projected rows
 ```
 
 The key change vs current MOCSS is **how** reconstruction works:
@@ -220,10 +220,14 @@ L_ctr = Σ_{m < m'} InfoNCE( MLP(S_m), MLP(S_m') )
 **Full objective:**
 
 ```text
-L = L_recon + λ_ctr·L_ctr + VICReg independence loss
+L = L_recon + λ_ctr·L_ctr + + λ_vic·L_vic
 ```
 
 
+
+Note: Don’t keep MOCSS `E[S⊙P]` alongside VICReg.
+
+Note: Use existing MOCSS `reconstruction_loss` (center → normalize → matrix norm), not literal ‖·‖², for fair comparison.
 
 ### Advantages
 
@@ -260,7 +264,7 @@ L = L_recon + λ_ctr·L_ctr + VICReg independence loss
 2. **Replace** independent `shared_rec` with one joint decoder: `D_m(concat(P_m, S_m))`
 3. **Upgrade** `orthogonal_loss` to VICReg cross-covariance per modality
 4. **Keep** shared information matrices C^m, MLP projection heads, and contrastive loss as in MOCSS
-5. **Add** variance hinge on S_m if collapse is observed during training
+5. **Add** variance hinge on S_m if collapse is observed during training. Ship **S variance from day 1**.
 
 ---
 
