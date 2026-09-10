@@ -32,9 +32,12 @@ LR = {'brca': 0.0004, 'kirc': 0.0002, 'coad': 0.0002, 'lihc': 0.0002}[disease]
 WEIGHT_DECAY = {'brca': 0.0007, 'kirc': 0.0007, 'coad': 0.0007, 'lihc': 0.0007}[disease]
 
 # 5 x 5 x 5 = 125
-LAMBDA_REC_GRID = [0.3, 0.5, 0.7, 1.0, 1.5]
-LAMBDA_CTR_GRID = [0.5, 0.7, 1.0, 1.5, 2.0]
-LAMBDA_VIC_GRID = [0.1, 0.5, 1.0, 2.0, 5.0]
+# LAMBDA_REC_GRID = [0.3, 0.5, 0.7, 1.0, 1.5]
+# LAMBDA_CTR_GRID = [0.5, 0.7, 1.0, 1.5, 2.0]
+# LAMBDA_VIC_GRID = [0.1, 0.5, 1.0, 2.0, 5.0]
+LAMBDA_REC_GRID = [1.5]
+LAMBDA_CTR_GRID = [0.7]
+LAMBDA_VIC_GRID = [0.5]
 
 
 def setup_seed(seed):
