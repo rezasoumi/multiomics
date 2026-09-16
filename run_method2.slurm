@@ -27,13 +27,14 @@ python -u -c "import torch; import multiomics.code.method2_joint_vicreg.model as
 echo "=== Method 2 sweep: 5x5x5 = 125 configs ==="
 echo "=== Joint D(P,S)->X + VICReg P⊥S + contrastive (no solo shared/specific recon) ==="
 echo "=== Grid: lambda_rec={0.3,0.5,0.7,1.0,1.5} lambda_ctr={0.5,0.7,1.0,1.5,2.0} lambda_vic={0.1,0.5,1.0,2.0,5.0} ==="
-echo "=== Fixed: lr/wd=MOCSS-brca, epochs=100; rank by NMI ==="
-echo "=== Checkpoint/early-stop on full val loss (all positive terms) ==="
+echo "=== Fixed: lr/wd=MOCSS-brca, epochs=100 ==="
+echo "=== Checkpoint/early-stop on weighted val loss (all positive terms) ==="
+echo "=== Rank across configs: eval_loss = L_recon + L_ctr + L_vic (unweighted) ==="
 
-python -u hyperparam_tuning.py --epochs 100 --batch-size 32 --resume --rank-metric nmi
+python -u hyperparam_tuning.py --epochs 100 --batch-size 32 --resume --rank-metric eval_loss
 
-echo "=== Final summarize (best by NMI) ==="
-python -u hyperparam_tuning.py --summarize-only --rank-metric nmi
+echo "=== Final summarize (best by fixed eval_loss) ==="
+python -u hyperparam_tuning.py --summarize-only --rank-metric eval_loss
 
 echo "=== Best config ==="
 python -u -c "

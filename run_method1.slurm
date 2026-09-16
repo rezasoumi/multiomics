@@ -30,13 +30,15 @@ python -u -c "import torch; import multiomics.code.method1_predictability.model 
 echo "=== Method 1 sweep: 5x5x5 = 125 predictability-weight configs ==="
 echo "=== Grid: alpha={0.3,0.5,0.7,1.0,1.5} beta={0.5,0.7,1.0,1.5,2.0} gamma={0.7,1.0,1.5,2.0,2.5} ==="
 echo "=== Fixed: lr/wd=MOCSS-brca defaults, lambda_ctr=1.0, epochs=100 ==="
+echo "=== Checkpoint/early-stop: constructive = L_std + α L_shared + λ_ctr L_ctr ==="
+echo "=== Rank across configs: eval_loss = L_std + L_shared + L_ctr (unweighted) ==="
 echo "=== Each config: train -> evaluate -> append leaderboard.csv; --resume skips done ==="
 
 # --resume makes the job safe to requeue if the walltime is hit
-python -u hyperparam_tuning.py --epochs 100 --batch-size 32 --resume --rank-metric nmi
+python -u hyperparam_tuning.py --epochs 100 --batch-size 32 --resume --rank-metric eval_loss
 
-echo "=== Final summarize (best by NMI) ==="
-python -u hyperparam_tuning.py --summarize-only --rank-metric nmi
+echo "=== Final summarize (best by fixed eval_loss) ==="
+python -u hyperparam_tuning.py --summarize-only --rank-metric eval_loss
 
 echo "=== Best config details ==="
 python -u -c "

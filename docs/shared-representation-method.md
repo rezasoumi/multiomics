@@ -6,11 +6,13 @@ This document summarizes the limitations of the current OMIDIENT/MOCSS shared-re
 
 **Code locations:**
 
-| Method | Package |
-| ------ | ------- |
-| Method 1 (full predictability) | `code/method1_predictability/` |
+
+| Method                                        | Package                         |
+| --------------------------------------------- | ------------------------------- |
+| Method 1 (full predictability)                | `code/method1_predictability/`  |
 | Method 1 ablation (no `k` / `L_own` + VICReg) | `code/method1_vicreg_ablation/` |
-| Method 2 (joint recon + VICReg) | `code/method2_joint_vicreg/` |
+| Method 2 (joint recon + VICReg)               | `code/method2_joint_vicreg/`    |
+
 
 **Context:** OMIDIENT (Negar et al.) improves multi-omics integration by incorporating Dirichlet distributions into the **private/specific** reconstruction networks. The **shared** branch still follows MOCSS. This thesis aims to extend OMIDIENT by improving the shared representation learning component—potentially via Dirichlet-based VAEs or other methods.
 
@@ -87,10 +89,10 @@ Used by **Method 1 ablation** and **Method 2**. For one modality, with batch-cen
 σ_P = sqrt( Var_batch(P) + eps )     # per latent dim
 σ_S = sqrt( Var_batch(S) + eps )
 
-var_loss = mean( ReLU(1 − σ_P) ) + mean( ReLU(1 − σ_S) )
+*var_loss = mean( ReLU(1 − σ_P) ) + mean( ReLU(1 − σ_S) )
            # two separate hinges, then summed (not pooled into one mean)
 
-Cov_P = (Pᵀ P) / (B−1);   Cov_S = (Sᵀ S) / (B−1)
+*Cov_P = (Pᵀ P) / (B−1);   Cov_S = (Sᵀ S) / (B−1)
 cov_loss = mean( offdiag(Cov_P)² ) + mean( offdiag(Cov_S)² )
 
 cross = (Pᵀ S) / (B−1)
@@ -100,11 +102,13 @@ L_vic^m = var_loss + cov_loss + cross_loss
 L_vic   = Σ_m L_vic^m
 ```
 
-| Sub-term | Role |
-| -------- | ---- |
-| `var_loss` on P and on S | Anti-collapse: each dim’s std should reach ≥ 1 |
+
+| Sub-term                   | Role                                                   |
+| -------------------------- | ------------------------------------------------------ |
+| `var_loss` on P and on S   | Anti-collapse: each dim’s std should reach ≥ 1         |
 | within off-diag `cov_loss` | Whitening / reduce redundant dims inside P or inside S |
-| `cross_loss` | Main **P ⊥ S** (linear) independence term |
+| `cross_loss`               | Main **P ⊥ S** (linear) independence term              |
+
 
 **Notes from code:**
 
@@ -112,6 +116,8 @@ L_vic   = Σ_m L_vic^m
 - `var_loss` already adds **separate** means for P and S. If S collapses and P does not, the S hinge still increases `var_loss`. For **logging**, the current code only records total `l_vic` (var + cov + cross over all modalities), so S-vs-P variance is not visible in CSV logs unless split later.
 - Only a single outer weight `λ_vic` scales the whole sum; there are no separate `λ_var_P` / `λ_var_S` / `λ_cross` yet.
 - MOCSS `orthogonal_loss` is **not** used alongside this term.
+
+
 
 ### Network plumbing (MOCSS-aligned)
 
@@ -121,7 +127,7 @@ L_vic   = Σ_m L_vic^m
 - Init: Kaiming normal on Linear weights; zero biases.
 - Typical sweep: BRCA, batch 32, 100 epochs, early stop patience 20 / `min_delta=0.005`, seed 21, MOCSS default `lr` / `weight_decay` for the disease.
 - Results under repo-root `results/` (e.g. `results/models_brca_method1/`), not under `code/results/`.
-- Ranking default: **NMI** (also log ARI, ACC, kNN).
+- Ranking default: fixed unweighted **`eval_loss`** (Method 1: `L_std+L_shared+L_ctr`; Method 1 ablation: `+L_vic`; Method 2: `L_recon+L_ctr+L_vic`). Checkpoint/early-stop still uses each config’s constructive or weighted val loss. Clustering metrics (NMI, ARI, ACC, kNN) are logged for reporting.
 
 ---
 
@@ -226,6 +232,8 @@ Optional full retrain without early stop: `retrain_config.py` (saves last-epoch 
 - **Minimize** L_std → (P_A, S_A) remain jointly sufficient for X_A
 - **Cross-view shared decoder** `f` forces S to be useful *collectively*, not a per-view full copy of X_m
 
+
+
 ### Advantages
 
 1. **Operational definition of "shared"**: what is predictable from other modalities' S, not what reconstructs locally.
@@ -234,17 +242,19 @@ Optional full retrain without early stop: `retrain_config.py` (saves last-epoch 
 4. **Cross-reconstruction** (`f`) reduces incentive for S_m to duplicate only local detail.
 5. **Theoretically defensible** in a thesis (sufficiency, privacy, minimal shared representation).
 
+
+
 ### Concerns
 
 
-| Issue                        | Detail                                                                                                                                       |
-| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| **12 predictors**            | 3 modalities × (h, f, g, k) = 12 networks on top of encoders—more parameters; tune α, β, γ                                                   |
+| Issue                        | Detail                                                                                                                              |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| **12 predictors**            | 3 modalities × (h, f, g, k) = 12 networks on top of encoders—more parameters; tune α, β, γ                                          |
 | **Minimax / two-step**       | Needs the two-step procedure above; naive single backward on −L_adv/−L_own trains adversaries incorrectly; β, γ can still oscillate |
-| **Over-strong k**            | Large γ can strip shared content from S_A, not only private residual—monitor L_own vs L_shared and keep γ modest                             |
-| **Weak f or g**              | If f is weak, shared may underfit; if g is weak, −L_adv is vacuous                                                                           |
-| **Signed val loss**          | Must use constructive checkpointing; do not early-stop on raw L_step2                                                                        |
-| **Contrastive / projection** | MLP projection can still hide some private dims in S; k mitigates but does not prove purity                                                  |
+| **Over-strong k**            | Large γ can strip shared content from S_A, not only private residual—monitor L_own vs L_shared and keep γ modest                    |
+| **Weak f or g**              | If f is weak, shared may underfit; if g is weak, −L_adv is vacuous                                                                  |
+| **Signed val loss**          | Must use constructive checkpointing; do not early-stop on raw L_step2                                                               |
+| **Contrastive / projection** | MLP projection can still hide some private dims in S; k mitigates but does not prove purity                                         |
 
 
 ---
@@ -257,9 +267,11 @@ Optional full retrain without early stop: `retrain_config.py` (saves last-epoch 
 
 This is Method 1 with:
 
-1. **`k` / `L_own` removed** (no own-shared insufficiency adversary).
+1. `k` **/** `L_own` **removed** (no own-shared insufficiency adversary).
 2. **VICReg P⊥S** added per modality (same `vicreg_ps_independence` as Method 2).
-3. Predictors kept: **`h`, `f`, `g` only** (9 predictors instead of 12).
+3. Predictors kept: `h`**,** `f`**,** `g` **only** (9 predictors instead of 12).
+
+
 
 ### Architecture
 
@@ -273,9 +285,11 @@ g_m(P_m', P_m'')  → X̂_m   maximize via −β (adversary)
 + L_ctr on MLP(S)           minimize (λ_ctr)
 ```
 
+
+
 ### Two-Step Training
 
-Same pattern as Method 1, but step 1 trains **`g` only**:
+Same pattern as Method 1, but step 1 trains `g` **only**:
 
 ```text
 L_step1 = Σ_A L_adv^A
@@ -283,6 +297,8 @@ L_step1 = Σ_A L_adv^A
 L_step2 = Σ_A [ L_std^A + α·L_shared^A − β·L_adv^A ]
         + λ_ctr·L_ctr + λ_vic·L_vic
 ```
+
+
 
 ### Checkpointing
 
@@ -304,18 +320,24 @@ constructive = L_std + α·L_shared + λ_ctr·L_ctr + λ_vic·L_vic
 → 125 configs; results under results/models_{disease}_method1_vicreg/
 ```
 
+
+
 ### Why this ablation
 
-- Isolates whether **cross-view predictability (`h`/`f`/`g`)** plus **within-view linear independence (VICReg)** is enough without the tricky `k` / `γ` term.
+- Isolates whether **cross-view predictability (**`h`**/**`f`**/**`g`**)** plus **within-view linear independence (VICReg)** is enough without the tricky `k` / `γ` term.
 - VICReg’s variance hinges act as the day-1 anti-collapse for both P and S (see shared VICReg section).
+
+
 
 ### Concerns
 
-| Issue | Detail |
-| ----- | ------ |
-| No `k` | Own `S_A` is not explicitly forced to be insufficient for full `X_A`; private bleed into S may remain if `f`/`g`/VICReg do not catch it |
-| Single `λ_vic` | Weights var + within-cov + cross together; cannot upweight S variance alone without a code change |
-| Still adversarial | `−β L_adv` needs two-step training and constructive checkpointing |
+
+| Issue             | Detail                                                                                                                                  |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| No `k`            | Own `S_A` is not explicitly forced to be insufficient for full `X_A`; private bleed into S may remain if `f`/`g`/VICReg do not catch it |
+| Single `λ_vic`    | Weights var + within-cov + cross together; cannot upweight S variance alone without a code change                                       |
+| Still adversarial | `−β L_adv` needs two-step training and constructive checkpointing                                                                       |
+
 
 ---
 
@@ -338,11 +360,12 @@ L_vic(P_m, S_m)   (VICReg; replaces MOCSS orthogonality)
 L_ctr on MLP(S)   (unchanged MOCSS-style contrastive)
 ```
 
-|                 | Current MOCSS for the shared reconstruction part | Method 2                                   |
-| --------------- | ------------------------------------------------ | ------------------------------------------ |
-| Reconstruction  | `Dec_S(S_m) → X_m` and `Dec_P(P_m) → X_m`      | `D_m(concat(P_m, S_m)) → X_m` only         |
-| Disentanglement | Weak elementwise orthogonality                   | VICReg `var + within-cov + cross-cov`      |
-| Training        | (varies)                                         | **Single** optimizer; all loss terms ≥ 0   |
+
+|                 | Current MOCSS for the shared reconstruction part | Method 2                                 |
+| --------------- | ------------------------------------------------ | ---------------------------------------- |
+| Reconstruction  | `Dec_S(S_m) → X_m` and `Dec_P(P_m) → X_m`        | `D_m(concat(P_m, S_m)) → X_m` only       |
+| Disentanglement | Weak elementwise orthogonality                   | VICReg `var + within-cov + cross-cov`    |
+| Training        | (varies)                                         | **Single** optimizer; all loss terms ≥ 0 |
 
 
 With a single joint decoder, S_m no longer must **alone** reconstruct X_m. It only needs to contribute the shared part together with P_m. VICReg then pushes P_m and S_m to carry non-overlapping linear information and not collapse.
@@ -373,7 +396,7 @@ Intended full sweep (125 configs):
 λ_vic ∈ {0.1, 0.5, 1.0, 2.0, 5.0}
 ```
 
-Results under `results/models_{disease}_method2/` with folder names `{lr}_{wd}_r{}_c{}_v{}`. Rank by NMI by default. (`hyperparam_tuning.py` may temporarily shrink grids for single-config runs.)
+Results under `results/models_{disease}_method2/` with folder names `{lr}_{wd}_r{}_c{}_v{}`. Rank by fixed unweighted `eval_loss` by default (not the weighted training objective).
 
 ### Advantages
 
@@ -382,6 +405,8 @@ Results under `results/models_{disease}_method2/` with folder names `{lr}_{wd}_r
 3. **Clear disentanglement story** — P_m and S_m partition information under a single reconstruction objective, with VICReg preventing duplication / collapse
 4. **Easier to integrate** with OMIDIENT Dirichlet on P_m only; minimal architectural change from current code
 5. **Stable checkpointing** — all-positive objective
+
+
 
 ### Concerns
 
@@ -412,17 +437,18 @@ Results under `results/models_{disease}_method2/` with folder names `{lr}_{wd}_r
 ## Method comparison (quick)
 
 
-| | Method 1 | Method 1 ablation | Method 2 |
-| --- | --- | --- | --- |
-| Joint / solo recon | `h(P,S)`; no solo MOCSS recon | same | `D(concat(P,S))` only |
-| Cross-shared `f` | yes | yes | no |
-| Private adversary `g` | yes | yes | no |
-| Own-shared `k` | yes | **no** | no |
-| VICReg P⊥S | no | yes | yes |
-| MOCSS ortho | no | no | no |
-| Training | 2-step, 2 opts | 2-step, 2 opts | 1-step, 1 opt |
-| Checkpoint | constructive | constructive | raw val loss |
-| Sweep knobs | α, β, γ | α, β, λ_vic | λ_rec, λ_ctr, λ_vic |
+|                       | Method 1                      | Method 1 ablation | Method 2              |
+| --------------------- | ----------------------------- | ----------------- | --------------------- |
+| Joint / solo recon    | `h(P,S)`; no solo MOCSS recon | same              | `D(concat(P,S))` only |
+| Cross-shared `f`      | yes                           | yes               | no                    |
+| Private adversary `g` | yes                           | yes               | no                    |
+| Own-shared `k`        | yes                           | **no**            | no                    |
+| VICReg P⊥S            | no                            | yes               | yes                   |
+| MOCSS ortho           | no                            | no                | no                    |
+| Training              | 2-step, 2 opts                | 2-step, 2 opts    | 1-step, 1 opt         |
+| Checkpoint            | constructive                  | constructive      | raw val loss          |
+| Sweep knobs           | α, β, γ                       | α, β, λ_vic       | λ_rec, λ_ctr, λ_vic   |
+
 
 ---
 
@@ -433,3 +459,4 @@ Results under `results/models_{disease}_method2/` with folder names `{lr}_{wd}_r
 - OMIDIENT paper: *OMIDIENT: Multiomics Integration for Cancer by Dirichlet Auto-Encoder Networks*
 - Repository: [Zenodo record](https://zenodo.org/records/20273710)
 - Baseline shared/specific model: MOCSS (Multi-Omics Contrastive Shared-Specific)
+

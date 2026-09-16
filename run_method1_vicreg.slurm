@@ -28,12 +28,13 @@ echo "=== Method 1 VICReg ablation sweep: 5x5x5 = 125 configs ==="
 echo "=== No L_own / k; VICReg independence of P and S per modality ==="
 echo "=== Grid: alpha={0.3,0.5,0.7,1.0,1.5} beta={0.5,0.7,1.0,1.5,2.0} lambda_vic={0.1,0.5,1.0,2.0,5.0} ==="
 echo "=== Fixed: lr/wd=MOCSS-brca, lambda_ctr=1.0, epochs=100 ==="
-echo "=== Checkpoint/early-stop on constructive = std+α·shared+λ_ctr·ctr+λ_vic·vic ==="
+echo "=== Checkpoint/early-stop: constructive = std+α·shared+λ_ctr·ctr+λ_vic·vic ==="
+echo "=== Rank across configs: eval_loss = L_std + L_shared + L_ctr + L_vic (unweighted) ==="
 
-python -u hyperparam_tuning.py --epochs 100 --batch-size 32 --resume --rank-metric nmi
+python -u hyperparam_tuning.py --epochs 100 --batch-size 32 --resume --rank-metric eval_loss
 
-echo "=== Final summarize (best by NMI) ==="
-python -u hyperparam_tuning.py --summarize-only --rank-metric nmi
+echo "=== Final summarize (best by fixed eval_loss) ==="
+python -u hyperparam_tuning.py --summarize-only --rank-metric eval_loss
 
 echo "=== Best config ==="
 python -u -c "
