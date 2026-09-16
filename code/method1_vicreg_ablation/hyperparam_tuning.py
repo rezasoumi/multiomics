@@ -37,7 +37,7 @@ warnings.filterwarnings('ignore')
 disease = 'brca'
 EPOCHS = 100
 BATCH_SIZE = 32
-USE_GPU = True
+USE_GPU = False
 SEED = 21
 TEMPERATURE = 0.4
 
