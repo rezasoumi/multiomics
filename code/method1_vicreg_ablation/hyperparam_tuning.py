@@ -301,14 +301,35 @@ def load_hparams(path):
     }
 
 
-def compute_eval_loss_from_checkpoint(path, batch=BATCH_SIZE):
+def load_or_rebuild_val_data(path):
+    """Load saved val split, or rebuild the same 60/20/20 split used in train_one."""
+    candidates = [
+        os.path.join(path, 'val_data_{}.npy'.format(disease)),
+        os.path.join(path, 'val_data_{}'.format(disease)),
+    ]
+    for cand in candidates:
+        if os.path.exists(cand):
+            return np.load(cand)
+
+    print('val_data not found under {}; rebuilding train/val/test split'.format(path))
+    _, _, _, view_train_concatenate, y_true = load_data(disease)
+    X_train, X_test, y_train, y_test = train_test_split(
+        view_train_concatenate, y_true, test_size=0.2, random_state=1
+    )
+    _, X_val, _, _ = train_test_split(
+        X_train, y_train, test_size=0.25, random_state=1
+    )
+    return X_val
+
+
+def compute_eval_loss_from_checkpoint(path, batch=BATCH_SIZE, hparams=None):
     eval_path = os.path.join(path, 'eval_loss.npy')
     if os.path.exists(eval_path):
         return float(np.load(eval_path))
 
-    hp = load_hparams(path)
+    hp = hparams if hparams is not None else load_hparams(path)
     view1_data, view2_data, view3_data, _, _ = load_data(disease)
-    X_val = np.load(os.path.join(path, 'val_data_{}'.format(disease)))
+    X_val = load_or_rebuild_val_data(path)
     val_loader = torch.utils.data.DataLoader(
         dataset=X_val, batch_size=batch, shuffle=False, drop_last=True
     )
@@ -407,7 +428,16 @@ def run_sweep(args):
             print('Found existing model, evaluating only: {}'.format(name))
             path = os.path.join(results_parent(), name)
             val_loss = float(np.load(os.path.join(path, 'loss.npy')))
-            eval_loss = compute_eval_loss_from_checkpoint(path, batch=batch)
+            eval_loss = compute_eval_loss_from_checkpoint(
+                path,
+                batch=batch,
+                hparams={
+                    'alpha': alpha,
+                    'beta': beta,
+                    'lambda_vic': lambda_vic,
+                    'lambda_ctr': lambda_ctr,
+                },
+            )
         else:
             path, name, val_loss, eval_loss = train_one(
                 batch, epochs, lr, wd, alpha, beta, lambda_vic, lambda_ctr
