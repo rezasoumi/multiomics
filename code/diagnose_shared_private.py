@@ -36,11 +36,15 @@ warnings.filterwarnings('ignore')
 
 NUM_CLUST = {'lihc': 2, 'coad': 4, 'kirc': 2, 'brca': 5}
 
+# This file lives in <repo>/code/ → results are <repo>/results/
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+RESULTS_ROOT = os.path.join(REPO_ROOT, 'results')
+
 METHOD_DIRS = {
-    'method1': ('method1_predictability', 'models_{}_method1'),
-    'method1_vicreg': ('method1_vicreg_ablation', 'models_{}_method1_vicreg'),
-    'method2': ('method2_joint_vicreg', 'models_{}_method2'),
-    'mocss': ('ae', 'models_{}_ae'),
+    'method1': 'models_{}_method1',
+    'method1_vicreg': 'models_{}_method1_vicreg',
+    'method2': 'models_{}_method2',
+    'mocss': 'models_{}_ae',
 }
 
 
@@ -170,8 +174,8 @@ def method1_decoder_errors(model, out, views):
 
 
 def diagnose(method, disease, config):
-    pkg, parent_tmpl = METHOD_DIRS[method]
-    parent = os.path.join('../../results', parent_tmpl.format(disease))
+    parent_tmpl = METHOD_DIRS[method]
+    parent = os.path.join(RESULTS_ROOT, parent_tmpl.format(disease))
     config_dir = os.path.join(parent, config)
     if not os.path.isdir(config_dir):
         raise FileNotFoundError(config_dir)
@@ -324,12 +328,18 @@ def main(args):
         print('Wrote', out_path)
         all_rows.append(report)
 
-    summary_dir = '../../results/diagnostics'
+    summary_dir = os.path.join(RESULTS_ROOT, 'diagnostics')
     os.makedirs(summary_dir, exist_ok=True)
     summary_path = os.path.join(summary_dir, 'shared_private_panel_{}.json'.format(args.disease))
     with open(summary_path, 'w') as f:
         json.dump(all_rows, f, indent=2)
-    print('\nPanel summary:', summary_path)
+    print('\nRESULTS_ROOT:', RESULTS_ROOT)
+    print('Panel summary:', summary_path)
+    if not all_rows:
+        print(
+            'WARNING: no configs found. Check that trained folders exist under RESULTS_ROOT, e.g.\n'
+            '  {}/models_brca_ae/0.0004_0.0007'.format(RESULTS_ROOT)
+        )
 
 
 if __name__ == '__main__':
