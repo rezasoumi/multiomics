@@ -37,8 +37,11 @@ warnings.filterwarnings('ignore')
 NUM_CLUST = {'lihc': 2, 'coad': 4, 'kirc': 2, 'brca': 5}
 
 # This file lives in <repo>/code/ → results are <repo>/results/
+# Override with env MULTIOMICS_RESULTS if checkpoints live elsewhere.
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-RESULTS_ROOT = os.path.join(REPO_ROOT, 'results')
+RESULTS_ROOT = os.path.abspath(
+    os.environ.get('MULTIOMICS_RESULTS', os.path.join(REPO_ROOT, 'results'))
+)
 
 METHOD_DIRS = {
     'method1': 'models_{}_method1',
@@ -178,7 +181,7 @@ def diagnose(method, disease, config):
     parent = os.path.join(RESULTS_ROOT, parent_tmpl.format(disease))
     config_dir = os.path.join(parent, config)
     if not os.path.isdir(config_dir):
-        raise FileNotFoundError(config_dir)
+        raise FileNotFoundError(os.path.abspath(config_dir))
 
     n_clusters = NUM_CLUST[disease]
     specific, shared, views, y, model, out = load_latents(method, disease, config_dir)
@@ -299,6 +302,8 @@ def print_report(r):
 
 
 def main(args):
+    print('diagnose_shared_private.py file:', os.path.abspath(__file__))
+    print('RESULTS_ROOT:', RESULTS_ROOT)
     jobs = []
     if args.config:
         jobs.append((args.method, args.disease, args.config))
