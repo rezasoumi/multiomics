@@ -25,7 +25,6 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import train_test_split
 
-from multiomics.code.loading_data import load_data
 from multiomics.code.shared_rep_metrics import (
     clustering_and_knn,
     probe_XA_from_other,
@@ -89,37 +88,69 @@ def _subtype_probe(X, y):
     return float(accuracy_score(y_te, clf.predict(X_te)))
 
 
+def infer_view_sizes(method, state):
+    """Read input dims from checkpoint weights (no CSV / load_data needed)."""
+    if method == 'mocss':
+        d1 = int(state['shared1_l1.weight'].shape[1])
+        d2 = int(state['shared2_l1.weight'].shape[1])
+        d3 = int(state['shared3_l1.weight'].shape[1])
+        return [d1, d2, d3]
+    # Method1 / VICReg / Method2 ModuleDict encoders
+    d1 = int(state['shared_enc.1.0.weight'].shape[1])
+    d2 = int(state['shared_enc.2.0.weight'].shape[1])
+    d3 = int(state['shared_enc.3.0.weight'].shape[1])
+    return [d1, d2, d3]
+
+
 def load_latents(method, disease, config_dir):
-    # loading_data.load_data uses paths like ../../data/... and expects CWD
-    # to be a package dir under code/ (e.g. code/ae), not the repo root.
-    os.chdir(os.path.join(REPO_ROOT, 'code', 'ae'))
-    view1_data, view2_data, view3_data, _, _ = load_data(disease)
-    data = np.load(os.path.join(config_dir, 'test_data_{}.npy'.format(disease)))
-    label = np.load(
-        os.path.join(config_dir, 'test_label_{}.npy'.format(disease)),
-        allow_pickle=True,
-    )
-    d1, d2 = view1_data.shape[1], view2_data.shape[1]
+    """Load frozen latents from an existing checkpoint + saved test split.
+
+    Does not call loading_data.load_data (avoids fragile ../../data CWD paths).
+    View sizes are inferred from the checkpoint; inputs come from test_data_*.npy.
+    """
+    model_path = os.path.join(config_dir, 'model_{}'.format(disease))
+    data_path = os.path.join(config_dir, 'test_data_{}.npy'.format(disease))
+    label_path = os.path.join(config_dir, 'test_label_{}.npy'.format(disease))
+    if not os.path.isfile(model_path):
+        raise FileNotFoundError(model_path)
+    if not os.path.isfile(data_path):
+        raise FileNotFoundError(data_path)
+
+    state = torch.load(model_path, map_location='cpu')
+    view_size = infer_view_sizes(method, state)
+    d1, d2, d3 = view_size
+    data = np.load(data_path)
+    label = np.load(label_path, allow_pickle=True)
+    if data.shape[1] != d1 + d2 + d3:
+        raise ValueError(
+            'test_data width {} != sum(view_size) {} for {}'.format(
+                data.shape[1], d1 + d2 + d3, config_dir
+            )
+        )
+
     view1 = torch.tensor(data[:, :d1], dtype=torch.float32)
     view2 = torch.tensor(data[:, d1:d1 + d2], dtype=torch.float32)
     view3 = torch.tensor(data[:, d1 + d2:], dtype=torch.float32)
     views = {1: view1.numpy(), 2: view2.numpy(), 3: view3.numpy()}
     y = truth_from_label(disease, label)
     setup_seed(2)
+    print(
+        'Loaded {} | view_size={} | n_test={}'.format(
+            config_dir, view_size, data.shape[0]
+        )
+    )
 
     if method == 'mocss':
         from multiomics.code.ae.mocss_original_refactored import SharedAndSpecificEmbedding
 
         model = SharedAndSpecificEmbedding(
-            view_size=[view1_data.shape[1], view2_data.shape[1], view3_data.shape[1]],
+            view_size=view_size,
             n_units_1=[512, 256, 128, 32],
             n_units_2=[512, 256, 128, 32],
             n_units_3=[256, 128, 64, 32],
             mlp_size=[32, 8],
         )
-        model.load_state_dict(
-            torch.load(os.path.join(config_dir, 'model_{}'.format(disease)), map_location='cpu')
-        )
+        model.load_state_dict(state)
         model.eval()
         with torch.no_grad():
             s1, sh1, s2, sh2, s3, sh3, *_ = model(view1, view2, view3)
@@ -135,15 +166,13 @@ def load_latents(method, disease, config_dir):
         from multiomics.code.method2_joint_vicreg.model import SharedAndSpecificEmbedding
 
     model = SharedAndSpecificEmbedding(
-        view_size=[view1_data.shape[1], view2_data.shape[1], view3_data.shape[1]],
+        view_size=view_size,
         n_units_1=[512, 256, 128, 32],
         n_units_2=[512, 256, 128, 32],
         n_units_3=[256, 128, 64, 32],
         mlp_size=[32, 8],
     )
-    model.load_state_dict(
-        torch.load(os.path.join(config_dir, 'model_{}'.format(disease)), map_location='cpu')
-    )
+    model.load_state_dict(state)
     model.eval()
     with torch.no_grad():
         out = model(view1, view2, view3)
