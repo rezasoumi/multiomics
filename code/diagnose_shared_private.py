@@ -90,6 +90,9 @@ def _subtype_probe(X, y):
 
 
 def load_latents(method, disease, config_dir):
+    # loading_data.load_data uses paths like ../../data/... and expects CWD
+    # to be a package dir under code/ (e.g. code/ae), not the repo root.
+    os.chdir(os.path.join(REPO_ROOT, 'code', 'ae'))
     view1_data, view2_data, view3_data, _, _ = load_data(disease)
     data = np.load(os.path.join(config_dir, 'test_data_{}.npy'.format(disease)))
     label = np.load(
@@ -325,6 +328,9 @@ def main(args):
             report, config_dir = diagnose(method, disease, config)
         except FileNotFoundError as e:
             print('SKIP missing:', e)
+            continue
+        except Exception as e:
+            print('SKIP error for {} / {}: {}: {}'.format(method, config, type(e).__name__, e))
             continue
         print_report(report)
         out_path = os.path.join(config_dir, 'diagnostics_shared_private.json')

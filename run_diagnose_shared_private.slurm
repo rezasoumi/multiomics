@@ -34,6 +34,8 @@ test -d ${MULTIOMICS_RESULTS}/models_brca_ae/0.0004_0.0007 && echo "OK: mocss ch
 
 echo "=== Panel: MOCSS + Method1 (loss-best & #3) + VICReg (loss-best & #10) + Method2 (loss-best & high-NMI) ==="
 
+# load_data() needs CWD like code/ae (../../data/...). The Python script chdirs itself;
+# keep PYTHONPATH pointed at the github parent so `import multiomics` works.
 python -u ${REPO}/code/diagnose_shared_private.py --disease brca
 
 echo "=== Done ==="
