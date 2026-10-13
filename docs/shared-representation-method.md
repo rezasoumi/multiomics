@@ -127,7 +127,9 @@ L_vic   = Σ_m L_vic^m
 - Init: Kaiming normal on Linear weights; zero biases.
 - Typical sweep: BRCA, batch 32, 100 epochs, early stop patience 20 / `min_delta=0.005`, seed 21, MOCSS default `lr` / `weight_decay` for the disease.
 - Results under repo-root `results/` (e.g. `results/models_brca_method1/`), not under `code/results/`.
-- Ranking default: fixed unweighted **`eval_loss`** (Method 1: `L_std+L_shared+L_ctr`; Method 1 ablation: `+L_vic`; Method 2: `L_recon+L_ctr+L_vic`). Checkpoint/early-stop still uses each config’s constructive or weighted val loss. Clustering metrics (NMI, ARI, ACC, kNN) are logged for reporting.
+- **Private branch:** plain AE encoders/decoders (MOCSS-style), **not** OMIDIENT’s Dirichlet private VAE. Fair comparisons in this stage are vs **MOCSS (AE)** only; OMIDIENT mixing is deferred until shared methods are settled.
+- **Ranking default (MOCSS-style):** core unweighted validation loss — Method 1 / Method 1 VICReg: `L_std + L_shared + L_ctr`; Method 2: `L_recon + L_ctr`. **`L_vic` and adversarial (`−β/−γ`) terms are excluded from ranking** (training regularizers only). Checkpoint/early-stop still uses each config’s constructive or weighted val loss. Clustering uses KMeans `n_init=30`.
+- **Shared-quality metrics** (see `code/shared_rep_metrics.py`): (1) clustering + kNN on `mean(S)` (`s_nmi`, `s_knn_acc`, …); (2) cross-view probes — subtype from `S_other`, and Ridge R² for `X_A ← (S_B,S_C)` vs `X_A ← (P_B,P_C)`; (3) alignment of shared codes — mean pairwise cosine / CCA / linear CKA.
 
 ---
 
@@ -396,7 +398,7 @@ Intended full sweep (125 configs):
 λ_vic ∈ {0.1, 0.5, 1.0, 2.0, 5.0}
 ```
 
-Results under `results/models_{disease}_method2/` with folder names `{lr}_{wd}_r{}_c{}_v{}`. Rank by fixed unweighted `eval_loss` by default (not the weighted training objective).
+Results under `results/models_{disease}_method2/` with folder names `{lr}_{wd}_r{}_c{}_v{}`. Rank by fixed unweighted `eval_loss = L_recon + L_ctr` by default (`L_vic` excluded; not the weighted training objective).
 
 ### Advantages
 
@@ -439,6 +441,7 @@ Results under `results/models_{disease}_method2/` with folder names `{lr}_{wd}_r
 
 |                       | Method 1                      | Method 1 ablation | Method 2              |
 | --------------------- | ----------------------------- | ----------------- | --------------------- |
+| Private branch        | MOCSS AE                      | MOCSS AE          | MOCSS AE              |
 | Joint / solo recon    | `h(P,S)`; no solo MOCSS recon | same              | `D(concat(P,S))` only |
 | Cross-shared `f`      | yes                           | yes               | no                    |
 | Private adversary `g` | yes                           | yes               | no                    |
@@ -448,6 +451,19 @@ Results under `results/models_{disease}_method2/` with folder names `{lr}_{wd}_r
 | Training              | 2-step, 2 opts                | 2-step, 2 opts    | 1-step, 1 opt         |
 | Checkpoint            | constructive                  | constructive      | raw val loss          |
 | Sweep knobs           | α, β, γ                       | α, β, λ_vic       | λ_rec, λ_ctr, λ_vic   |
+| Rank configs by       | `L_std+L_shared+L_ctr`        | same (no `L_vic`) | `L_recon+L_ctr` (no `L_vic`) |
+
+
+### Evaluation protocol (`code/shared_rep_metrics.py`)
+
+Used by all three method `evaluate.py` scripts:
+
+1. **Integration (reported):** KMeans (`n_init=30`) + kNN on `z = concat(P1,P2,P3, mean(S))` → `nmi`, `ari`, `acc`, `knn_acc`, … (config ranking uses core val `eval_loss`, not these)
+2. **Shared-only:** same clustering/kNN on `mean(S)` → `s_nmi`, `s_knn_acc`, … (plus per-view `s1_*` … `s3_*`)
+3. **Cross-view probes:**
+   - subtype from `concat(S_B, S_C)` (logistic regression) → `probe_subtype_from_S_other_acc`
+   - Ridge R² for `X_A ← (S_B,S_C)` vs `X_A ← (P_B,P_C)` → `probe_XA_from_S_other_r2`, `probe_XA_from_P_other_r2`, `probe_XA_S_minus_P_r2`
+4. **Alignment:** mean pairwise cosine / first CCA corr / linear CKA among `(S1,S2)`, `(S1,S3)`, `(S2,S3)`
 
 
 ---

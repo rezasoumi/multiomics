@@ -381,8 +381,14 @@ def main(args):
     else:
 
         util.plot_with_path(final_embedding, truth, model_path + "/final_em", method)
-        km = KMeans(n_clusters=num_clust, random_state=42)
-        y_pred = km.fit_predict(final_embedding)
+        best_inertia = float('inf')
+        y_pred = None
+        for i in range(30):
+            kmeans = KMeans(n_clusters=num_clust, init='k-means++', random_state=i)
+            labels = kmeans.fit_predict(final_embedding)
+            if kmeans.inertia_ < best_inertia:
+                best_inertia = kmeans.inertia_
+                y_pred = labels
         nmi_, ari_, f_score_, acc_, v_, ch = evaluation.evaluate(truth, y_pred)
         print('\n' + ' ' * 8 + '|==>  nmi: %.4f,  ari: %.4f,  f_score: %.4f,  acc: %.4f,  v_measure: %.4f,  '
                                'ch_index: %.4f  <==|' % (nmi_, ari_, f_score_, acc_, v_, ch))

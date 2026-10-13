@@ -29,7 +29,7 @@ echo "=== Joint D(P,S)->X + VICReg P⊥S + contrastive (no solo shared/specific 
 echo "=== Grid: lambda_rec={0.3,0.5,0.7,1.0,1.5} lambda_ctr={0.5,0.7,1.0,1.5,2.0} lambda_vic={0.1,0.5,1.0,2.0,5.0} ==="
 echo "=== Fixed: lr/wd=MOCSS-brca, epochs=100 ==="
 echo "=== Checkpoint/early-stop on weighted val loss (all positive terms) ==="
-echo "=== Rank across configs: eval_loss = L_recon + L_ctr + L_vic (unweighted) ==="
+echo "=== Rank across configs: eval_loss = L_recon + L_ctr (unweighted; L_vic excluded) ==="
 
 python -u hyperparam_tuning.py --epochs 100 --batch-size 32 --resume --rank-metric eval_loss
 

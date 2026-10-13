@@ -3,9 +3,10 @@
 Within each config: checkpoint / early-stop on weighted val loss
   L = λ_rec L_recon + λ_ctr L_ctr + λ_vic L_vic
 
-Across configs: rank by fixed (unweighted) evaluation loss
-  eval_loss = L_recon + L_ctr + L_vic
-so swept weights do not rescale the selection criterion.
+Across configs: rank by fixed core validation loss (exclude VICReg from ranking):
+  eval_loss = L_recon + L_ctr
+(L_vic is a training regularizer only; not used for ranking).
+Also log clustering / shared-only / probe / alignment metrics for reporting.
 """
 
 import os
@@ -27,6 +28,7 @@ from multiomics.code.method2_joint_vicreg.model import (
 )
 from multiomics.code.method2_joint_vicreg.training import train, validation, EarlyStopper
 from multiomics.code.method2_joint_vicreg.evaluate import evaluate_config
+from multiomics.code.shared_rep_metrics import LEADERBOARD_METRIC_KEYS
 
 warnings.filterwarnings('ignore')
 
@@ -47,12 +49,23 @@ LAMBDA_VIC_GRID = [0.1, 0.5, 1.0, 2.0, 5.0]
 
 MINIMIZE_METRICS = frozenset({'eval_loss', 'val_loss'})
 DEFAULT_RANK_METRIC = 'eval_loss'
-RANK_CHOICES = ['eval_loss', 'nmi', 'ari', 'acc', 'knn_acc', 'f_score']
+RANK_CHOICES = [
+    'nmi',
+    's_nmi',
+    'ari',
+    'acc',
+    'knn_acc',
+    's_knn_acc',
+    'f_score',
+    'eval_loss',
+    'probe_subtype_from_S_other_acc',
+    'align_cka_mean',
+]
 
 
 def fixed_eval_loss(avg_terms):
-    """Config-comparable validation score (coeffs fixed at 1)."""
-    return float(avg_terms['l_recon'] + avg_terms['l_ctr'] + avg_terms['l_vic'])
+    """Config-comparable core val score (coeffs fixed at 1; no L_vic)."""
+    return float(avg_terms['l_recon'] + avg_terms['l_ctr'])
 
 
 def setup_seed(seed):
@@ -83,7 +96,7 @@ def append_leaderboard(row, fieldnames):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     write_header = not os.path.exists(path) or os.path.getsize(path) == 0
     with open(path, 'a', newline='') as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction='ignore')
         if write_header:
             writer.writeheader()
         writer.writerow(row)
@@ -123,7 +136,7 @@ def summarize_best(metric=DEFAULT_RANK_METRIC):
     out = {
         'rank_metric': metric,
         'rank_direction': 'min' if minimize else 'max',
-        'eval_loss_definition': 'L_recon + L_ctr + L_vic (unweighted)',
+        'eval_loss_definition': 'L_recon + L_ctr (unweighted; ranking; L_vic excluded)',
         'config': best['config'],
         'lambda_rec': float(best['lambda_rec']),
         'lambda_ctr': float(best['lambda_ctr']),
@@ -137,6 +150,21 @@ def summarize_best(metric=DEFAULT_RANK_METRIC):
         'knn_acc': float(best['knn_acc']),
         'ch_index': float(best['ch_index']),
     }
+    for k in (
+        's_nmi',
+        's_ari',
+        's_acc',
+        's_knn_acc',
+        'probe_subtype_from_S_other_acc',
+        'probe_XA_from_S_other_r2',
+        'probe_XA_from_P_other_r2',
+        'probe_XA_S_minus_P_r2',
+        'align_cosine_mean',
+        'align_cca_mean',
+        'align_cka_mean',
+    ):
+        if k in best and best[k] not in (None, ''):
+            out[k] = float(best[k])
     with open(best_json_path(), 'w') as f:
         json.dump(out, f, indent=2)
 
@@ -145,16 +173,17 @@ def summarize_best(metric=DEFAULT_RANK_METRIC):
         metric, 'lower better' if minimize else 'higher better'
     ))
     for i, r in enumerate(ranked[:10], 1):
+        s_nmi = float(r['s_nmi']) if r.get('s_nmi') not in (None, '') else float('nan')
         print(
-            '{:2d}. {} | eval={:.4f} nmi={:.4f} ari={:.4f} acc={:.4f} knn={:.2f} weighted_val={:.4f}'.format(
+            '{:2d}. {} | nmi={:.4f} s_nmi={:.4f} ari={:.4f} acc={:.4f} knn={:.2f} eval={:.4f}'.format(
                 i,
                 r['config'],
-                float(r['eval_loss']),
                 float(r['nmi']),
+                s_nmi,
                 float(r['ari']),
                 float(r['acc']),
                 float(r['knn_acc']),
-                float(r['val_loss']),
+                float(r['eval_loss']),
             )
         )
     print('\nBEST: {}'.format(best['config']))
@@ -335,8 +364,15 @@ def load_or_rebuild_val_data(path):
 
 def compute_eval_loss_from_checkpoint(path, batch=BATCH_SIZE, hparams=None):
     eval_path = os.path.join(path, 'eval_loss.npy')
-    if os.path.exists(eval_path):
-        return float(np.load(eval_path))
+    # Prefer recomputing from saved terms so ranking definition updates do not
+    # reuse a stale eval_loss.npy (e.g. older scores that included L_vic).
+    terms_path = os.path.join(path, 'val_terms.json')
+    if os.path.exists(terms_path):
+        with open(terms_path, 'r') as f:
+            avg_terms = json.load(f)
+        eval_loss = fixed_eval_loss(avg_terms)
+        np.save(eval_path, eval_loss)
+        return eval_loss
 
     # Fast path: reconstruct fixed eval_loss from the best weighted-val epoch.
     history_path = os.path.join(path, 'epoch_history.csv')
@@ -345,20 +381,15 @@ def compute_eval_loss_from_checkpoint(path, batch=BATCH_SIZE, hparams=None):
             hist = list(csv.DictReader(f))
         if hist and all(k in hist[0] for k in ('val_loss', 'val_recon', 'val_ctr', 'val_vic')):
             best = min(hist, key=lambda r: float(r['val_loss']))
-            eval_loss = float(
-                float(best['val_recon']) + float(best['val_ctr']) + float(best['val_vic'])
-            )
+            avg_terms = {
+                'l_recon': float(best['val_recon']),
+                'l_ctr': float(best['val_ctr']),
+                'l_vic': float(best['val_vic']),
+            }
+            eval_loss = fixed_eval_loss(avg_terms)
             np.save(eval_path, eval_loss)
             with open(os.path.join(path, 'val_terms.json'), 'w') as f:
-                json.dump(
-                    {
-                        'l_recon': float(best['val_recon']),
-                        'l_ctr': float(best['val_ctr']),
-                        'l_vic': float(best['val_vic']),
-                    },
-                    f,
-                    indent=2,
-                )
+                json.dump(avg_terms, f, indent=2)
             return eval_loss
 
     hp = hparams if hparams is not None else load_hparams(path)
@@ -420,8 +451,9 @@ def run_sweep(args):
         )
     )
     print(
-        'Rank metric default: {} = L_recon + L_ctr + L_vic (unweighted); '
-        'checkpoint/early-stop still uses weighted val loss.'.format(DEFAULT_RANK_METRIC)
+        'Rank metric default: {} = L_recon + L_ctr (unweighted; no L_vic); '
+        'checkpoint/early-stop still uses weighted val loss. '
+        'Also logs shared-only / probe / alignment metrics.'.format(DEFAULT_RANK_METRIC)
     )
 
     already = load_leaderboard_configs() if args.resume else set()
@@ -437,14 +469,7 @@ def run_sweep(args):
         'weight_decay',
         'eval_loss',
         'val_loss',
-        'nmi',
-        'ari',
-        'f_score',
-        'acc',
-        'v_measure',
-        'ch_index',
-        'knn_acc',
-    ]
+    ] + list(LEADERBOARD_METRIC_KEYS)
 
     for idx, (lambda_rec, lambda_ctr, lambda_vic) in enumerate(grid, 1):
         name = config_name(lr, wd, lambda_rec, lambda_ctr, lambda_vic)
@@ -475,14 +500,16 @@ def run_sweep(args):
 
         metrics = evaluate_config(disease, path, plot=False)
         print(
-            'RESULT {} | eval={:.4f} weighted_val={:.4f} nmi={:.4f} ari={:.4f} acc={:.4f} knn={:.2f}'.format(
+            'RESULT {} | nmi={:.4f} s_nmi={:.4f} ari={:.4f} acc={:.4f} knn={:.2f} '
+            'probe_S={:.4f} cka={:.4f}'.format(
                 name,
-                eval_loss,
-                val_loss,
                 metrics['nmi'],
+                metrics['s_nmi'],
                 metrics['ari'],
                 metrics['acc'],
                 metrics['knn_acc'],
+                metrics['probe_subtype_from_S_other_acc'],
+                metrics['align_cka_mean'],
             )
         )
 
@@ -523,7 +550,7 @@ if __name__ == '__main__':
         type=str,
         default=DEFAULT_RANK_METRIC,
         choices=RANK_CHOICES,
-        help='Metric used to pick the best config (default: fixed eval_loss)',
+        help='Metric used to pick the best config (default: core eval_loss)',
     )
     args, unknown = parser.parse_known_args()
     if unknown:
