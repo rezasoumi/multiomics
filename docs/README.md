@@ -162,20 +162,18 @@ Same `shared_rep_metrics` suite as MOCSS AE / Method 1–2. These use **product-
 
 | Method | Config | mean(S) NMI | concat(P) NMI | concat(P,S) NMI | ARI | Acc | kNN | subtype←S | Δ X R² | CKA |
 | ------ | ------ | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| OMIDIENT | `0.0003_0.0005_4` (K=4) | 0.5019 | — * | 0.5019 | 0.4224 | 0.6629 | 0.80 | 0.7500 | +1.14 | 0.691 |
+| OMIDIENT | `0.0003_0.0005_4` (K=4) | 0.5019 | 0.0480 | 0.5019 | 0.4224 | 0.6629 | 0.80 | 0.7500 | +1.14 | 0.691 |
 | Method 2 + OMIDIENT private | — | — | — | — | — | — | — | — | — | — |
-
-\* `concat(P)` was not in the first eval pass; re-run `run_omidient_eval.slurm` after syncing `shared_rep_metrics.py` (now reports `p_nmi`) to fill this cell.
 
 ### OMIDIENT detail (`0.0003_0.0005_4`)
 
 | | nmi | ari | f_score | acc | knn |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | concat(P,S) | 0.5019 | 0.4224 | 0.5732 | 0.6629 | 0.80 |
-| concat(P) | — * | — | — | — | — |
+| concat(P) | 0.0480 | 0.0166 | 0.2608 | 0.2914 | 0.50 |
 | mean(S) | 0.5019 | 0.4224 | 0.5732 | 0.6629 | 0.75 |
 
-**Note on equal concat(P,S) vs mean(S):** clustering NMI/ARI/acc/CH matching to many decimals is **not corruption**. It means KMeans finds the **same partition** on `concat(P,S)` as on `mean(S)` — i.e. private codes are not changing subtype clusters (often near-constant / weak `P` for that task). kNN can still differ slightly because distances live in a different ambient dimension. `concat(P)` NMI is the direct check; also see probe X←P R² ≪ 0 here (−0.87), which already suggests foreign `P` carries little usable linear signal.
+**Note:** `concat(P,S)` NMI = `mean(S)` NMI because `concat(P)` is weak for subtype (NMI ≈ 0.05) — KMeans on the joint embedding follows the shared codes. Probe X←P R² ≪ 0 (−0.87) is consistent with that.
 
 Probes: subtype←S_other = 0.7500 | X←S R² = 0.2689 | X←P R² = −0.8695 | Δ(S−P) = 1.1384  
 Alignment: cosine = −0.1559 | CCA = 0.9315 | CKA = 0.6907

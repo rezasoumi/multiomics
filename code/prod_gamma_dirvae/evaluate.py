@@ -50,8 +50,12 @@ def _truth_from_label(disease, label):
 
 
 def parse_k_from_config(folder):
-    """Folder names are {lr}_{wd}_{K}, e.g. 0.0003_0.0005_4."""
-    return int(str(folder).rstrip('/').split('_')[-1])
+    """Folder names are {lr}_{wd}_{K} or {lr}_{wd}_{K}_ortho, e.g. 0.0003_0.0005_4_ortho."""
+    parts = str(folder).rstrip('/').split('_')
+    for part in reversed(parts):
+        if part.isdigit():
+            return int(part)
+    raise ValueError('Could not parse K from config folder: {}'.format(folder))
 
 
 def results_parent(disease):

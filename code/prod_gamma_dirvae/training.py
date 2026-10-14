@@ -67,6 +67,7 @@ def train(train_loader, view1_data, view2_data, model, loss_function, temperatur
 
 def validation(val_loader, view1_data, view2_data, model, temperature, loss_function, USE_GPU, epoch, total_epochs):
     total_loss = 0.0
+    total_eval = 0.0
     total = 0.0
     for iteration_index, val_batch in enumerate(val_loader):
         val_data = val_batch
@@ -107,11 +108,17 @@ def validation(val_loader, view1_data, view2_data, model, temperature, loss_func
         loss = loss_function(params)
         total += len(val_data)
         total_loss += loss.item()
+        if getattr(loss_function, 'last_eval', None) is not None:
+            total_eval += float(loss_function.last_eval.detach().item())
 
     res = total_loss / total
-    print('[Epoch: %3d/%3d] Validation Loss: %f' % (epoch + 1, total_epochs, res))
+    eval_res = (total_eval / total) if total_eval > 0 else res
+    print(
+        '[Epoch: %3d/%3d] Validation Loss: %f | eval_loss: %f'
+        % (epoch + 1, total_epochs, res, eval_res)
+    )
 
-    return res
+    return res, eval_res
 
 
 class EarlyStopper:

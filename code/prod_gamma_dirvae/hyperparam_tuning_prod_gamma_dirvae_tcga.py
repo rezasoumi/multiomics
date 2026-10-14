@@ -68,7 +68,9 @@ def work(p):
         train(train_loader, view1_data, view2_data, model, loss_function, temperature, optimizer, epoch, USE_GPU, epochs)
 
         # validation
-        loss_val = validation(val_loader, view1_data, view2_data, model, temperature, loss_function, USE_GPU, epoch, epochs)
+        loss_val, _eval_val = validation(
+            val_loader, view1_data, view2_data, model, temperature, loss_function, USE_GPU, epoch, epochs
+        )
 
         print("epoch {0} done".format(epoch))
 

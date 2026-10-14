@@ -30,9 +30,26 @@ def setup_seed(seed):
 
 
 class SharedAndSpecificLoss(nn.Module):
-    def __init__(self, K):
+    def __init__(
+        self,
+        K,
+        use_orthogonal=False,
+        lambda_ctr=1.0,
+        lambda_recon=0.7,
+        lambda_kl=1.0,
+        lambda_ortho=1.0,
+    ):
         super(SharedAndSpecificLoss, self).__init__()
         self.num_of_clusters = K
+        # Default False matches the published OMIDIENT ProdGammaDirVae objective
+        # (contrastive + recon + KL only). Set True to add MOCSS-style ortho(S,P).
+        self.use_orthogonal = use_orthogonal
+        self.lambda_ctr = float(lambda_ctr)
+        self.lambda_recon = float(lambda_recon)
+        self.lambda_kl = float(lambda_kl)
+        self.lambda_ortho = float(lambda_ortho)
+        # Unweighted core terms from the last forward (for cross-λ ranking).
+        self.last_eval = None
 
     @staticmethod
     def orthogonal_loss(shared, specific):
@@ -106,7 +123,22 @@ class SharedAndSpecificLoss(nn.Module):
             KL += compute_kl_gamma(prior_alpha, specific2_alpha[k])
             KL += compute_kl_gamma(prior_alpha, specific3_alpha[k])
 
-        loss_total = contrastive_loss_all + .7 * reconstruction_loss_all + KL
+        # Unweighted core (for ranking across λ); ortho excluded like other regularizers.
+        self.last_eval = contrastive_loss_all + reconstruction_loss_all + KL
+
+        loss_total = (
+            self.lambda_ctr * contrastive_loss_all
+            + self.lambda_recon * reconstruction_loss_all
+            + self.lambda_kl * KL
+        )
+
+        if self.use_orthogonal:
+            orthogonal_loss_all = (
+                self.orthogonal_loss(shared1_output, specific1_output)
+                + self.orthogonal_loss(shared2_output, specific2_output)
+                + self.orthogonal_loss(shared3_output, specific3_output)
+            )
+            loss_total = loss_total + self.lambda_ortho * orthogonal_loss_all
 
         return loss_total
 
