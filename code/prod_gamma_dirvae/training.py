@@ -79,8 +79,8 @@ def validation(val_loader, view1_data, view2_data, model, temperature, loss_func
         view3_val_data = torch.tensor(view3_val_data).clone().detach()
 
         if USE_GPU:
-            view1_val_data, view2_val_data, view3_val_data = Variable(view1_val_data.cuda()), Variable(
-                view2_val_data.cuda()), Variable(view3_val_data.cuda())
+            view1_val_data, view2_val_data, view3_val_data = Variable(view1_val_data.float().cuda()), Variable(
+                view2_val_data.float().cuda()), Variable(view3_val_data.float().cuda())
         else:
             view1_val_data = Variable(view1_val_data).type(torch.FloatTensor)
             view2_val_data = Variable(view2_val_data).type(torch.FloatTensor)
@@ -93,6 +93,8 @@ def validation(val_loader, view1_data, view2_data, model, temperature, loss_func
             view3_shared_mlp = model(view1_val_data, view2_val_data, view3_val_data)
 
         prior_alpha = torch.Tensor(1, 8).float().fill_(.5)
+        if USE_GPU:
+            prior_alpha = prior_alpha.cuda()
 
         params = (prior_alpha, view1_val_data, view2_val_data, view3_val_data,  # For Blie version
                   view1_shared_em, view2_shared_em, view3_shared_em,
