@@ -22,7 +22,7 @@ from multiomics.code.method1_predictability.evaluate import evaluate_config
 warnings.filterwarnings('ignore')
 
 DISEASE = 'brca'
-USE_GPU = False
+USE_GPU = torch.cuda.is_available()
 SEED = 21
 
 

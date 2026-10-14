@@ -5,23 +5,14 @@ from torch.autograd import Variable
 
 
 def _split_batch(batch, view1_data, view2_data, use_gpu):
-    view1 = torch.tensor(batch[:, :view1_data.shape[1]]).clone().detach()
-    view2 = torch.tensor(
-        batch[:, view1_data.shape[1]:view1_data.shape[1] + view2_data.shape[1]]
-    ).clone().detach()
-    view3 = torch.tensor(
-        batch[:, view1_data.shape[1] + view2_data.shape[1]:]
-    ).clone().detach()
-
+    d1 = view1_data.shape[1]
+    d2 = view2_data.shape[1]
+    view1 = torch.as_tensor(batch[:, :d1], dtype=torch.float32)
+    view2 = torch.as_tensor(batch[:, d1:d1 + d2], dtype=torch.float32)
+    view3 = torch.as_tensor(batch[:, d1 + d2:], dtype=torch.float32)
     if use_gpu:
-        view1 = Variable(view1.float().cuda())
-        view2 = Variable(view2.float().cuda())
-        view3 = Variable(view3.float().cuda())
-    else:
-        view1 = Variable(view1).type(torch.FloatTensor)
-        view2 = Variable(view2).type(torch.FloatTensor)
-        view3 = Variable(view3).type(torch.FloatTensor)
-    return view1, view2, view3
+        view1, view2, view3 = view1.cuda(), view2.cuda(), view3.cuda()
+    return Variable(view1), Variable(view2), Variable(view3)
 
 
 def train(

@@ -3,7 +3,10 @@
 #SBATCH --time=96:00:00
 #SBATCH --mem=16G
 #SBATCH --cpus-per-task=4
-#SBATCH --gpus=1
+# torch 2.12+cu130 has no V100 (sm_70) kernels — require A100+
+#SBATCH --partition=gpu-a100-80g
+#SBATCH --gpus=a100:1
+#SBATCH --constraint=a100
 #SBATCH --output=logs/method1_vicreg_%j.out
 #SBATCH --error=logs/method1_vicreg_%j.err
 

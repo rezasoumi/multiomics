@@ -40,7 +40,7 @@ warnings.filterwarnings('ignore')
 disease = 'brca'
 EPOCHS = 100
 BATCH_SIZE = 32
-USE_GPU = False
+USE_GPU = torch.cuda.is_available()
 SEED = 21
 TEMPERATURE = 0.4
 
@@ -436,6 +436,12 @@ def run_sweep(args):
 
     grid = build_grid()
     total = len(grid)
+    print(
+        'USE_GPU={} | device={}'.format(
+            USE_GPU,
+            torch.cuda.get_device_name(0) if USE_GPU else 'cpu',
+        )
+    )
     print(
         'Sweep size: {} | alpha={} beta={} lambda_vic={} lambda_priv={} | '
         'lr={} wd={} lambda_ctr={}'.format(

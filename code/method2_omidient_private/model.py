@@ -82,7 +82,7 @@ def sample_product_dirichlet(h, alpha_layers):
 
     size = list(concentration_params[0].size())
     x, y = size[0], size[1]
-    em_normalized = torch.zeros(x, y, k_groups, device=h.device)
+    em_normalized = torch.zeros(x, y, k_groups, device=h.device, dtype=h.dtype)
     alphas = torch.stack(concentration_params)
     alphas_pos = []
 
@@ -90,7 +90,7 @@ def sample_product_dirichlet(h, alpha_layers):
         for k in range(k_groups):
             alpha_positive = F.sigmoid(alphas[k, j, :])
             alphas_pos.append(alpha_positive)
-            u = torch.rand(alpha_positive.shape, device=h.device)
+            u = torch.rand(alpha_positive.shape, device=h.device, dtype=h.dtype)
             temp = u.mul(alpha_positive).mul(torch.exp(lgamma(alpha_positive)))
             em = torch.pow(temp, torch.pow(alpha_positive, -1))
             tempreture = torch.pow(em.sum(), -1)
@@ -255,7 +255,9 @@ class SharedAndSpecificLoss(nn.Module):
             return (first_term - second_term + third_term).sum()
 
         device = out['specific'][1].device
-        prior = torch.tensor(self.prior_alpha, device=device)
+        prior = torch.tensor(
+            self.prior_alpha, device=device, dtype=out['specific'][1].dtype
+        )
         kl = 0.0
         for a in (1, 2, 3):
             alphas = out['alphas'][a]  # (K, batch, L)
