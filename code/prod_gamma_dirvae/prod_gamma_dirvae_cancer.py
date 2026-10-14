@@ -53,6 +53,15 @@ class SharedAndSpecificLoss(nn.Module):
 
     @staticmethod
     def orthogonal_loss(shared, specific):
+        # Shared AE latent is (B, L). ProdDirVae specific em is flatten(B, L, K) → (B, L*K).
+        # Average over the K Dirichlet groups so MOCSS elementwise ortho stays well-defined.
+        if specific.shape != shared.shape:
+            b, lat = shared.shape
+            if specific.shape[0] != b or specific.shape[1] % lat != 0:
+                raise ValueError(
+                    f"orthogonal_loss: shared {tuple(shared.shape)} vs specific {tuple(specific.shape)}"
+                )
+            specific = specific.view(b, lat, -1).mean(dim=2)
         shared = shared - shared.mean()
         specific = specific - specific.mean()
         shared = F.normalize(shared, p=2, dim=1)
