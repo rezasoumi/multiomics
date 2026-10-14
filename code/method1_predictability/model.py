@@ -44,7 +44,7 @@ def _decode(layers, z):
 class SharedAndSpecificEmbedding(nn.Module):
     """
     Per modality: shared encoder S_m, private encoder P_m, MLP projection.
-    Predictors: h(P,S), f(S',S''), g(P',P''), k(S).
+    Predictors: h(P,S), f(S',S''), g(P',P''), k(S), b(P).
     """
 
     def __init__(self, view_size, n_units_1, n_units_2, n_units_3, mlp_size):
@@ -60,6 +60,7 @@ class SharedAndSpecificEmbedding(nn.Module):
         self.f = nn.ModuleDict()
         self.g = nn.ModuleDict()
         self.k = nn.ModuleDict()
+        self.b = nn.ModuleDict()
 
         for i in (1, 2, 3):
             j = str(i)
@@ -78,6 +79,8 @@ class SharedAndSpecificEmbedding(nn.Module):
             self.f[j] = _build_decoder(2 * emb, u, vs)
             self.g[j] = _build_decoder(2 * emb, u, vs)
             self.k[j] = _build_decoder(emb, u, vs)
+            # b: own private sufficiency (solo P -> X)
+            self.b[j] = _build_decoder(emb, u, vs)
 
         self._init_weights()
 
@@ -94,7 +97,7 @@ class SharedAndSpecificEmbedding(nn.Module):
                 yield p
 
     def main_parameters(self):
-        for net in (self.shared_enc, self.specific_enc, self.mlp, self.h, self.f):
+        for net in (self.shared_enc, self.specific_enc, self.mlp, self.h, self.f, self.b):
             for p in net.parameters():
                 yield p
 
@@ -110,9 +113,9 @@ class SharedAndSpecificEmbedding(nn.Module):
         return specific, shared, shared_mlp
 
     def predict_all(self, specific, shared):
-        """Run h, f, g, k for each target modality. Codes may be detached by caller."""
+        """Run h, f, g, k, b for each target modality. Codes may be detached by caller."""
         others = {1: (2, 3), 2: (1, 3), 3: (1, 2)}
-        h_rec, f_rec, g_rec, k_rec = {}, {}, {}, {}
+        h_rec, f_rec, g_rec, k_rec, b_rec = {}, {}, {}, {}, {}
         for a in (1, 2, 3):
             j = str(a)
             b, c = others[a]
@@ -120,11 +123,12 @@ class SharedAndSpecificEmbedding(nn.Module):
             f_rec[a] = _decode(self.f[j], torch.cat([shared[b], shared[c]], dim=1))
             g_rec[a] = _decode(self.g[j], torch.cat([specific[b], specific[c]], dim=1))
             k_rec[a] = _decode(self.k[j], shared[a])
-        return h_rec, f_rec, g_rec, k_rec
+            b_rec[a] = _decode(self.b[j], specific[a])
+        return h_rec, f_rec, g_rec, k_rec, b_rec
 
     def forward(self, view1_input, view2_input, view3_input):
         specific, shared, shared_mlp = self.encode_views(view1_input, view2_input, view3_input)
-        h_rec, f_rec, g_rec, k_rec = self.predict_all(specific, shared)
+        h_rec, f_rec, g_rec, k_rec, b_rec = self.predict_all(specific, shared)
         return {
             'specific': specific,
             'shared': shared,
@@ -133,16 +137,18 @@ class SharedAndSpecificEmbedding(nn.Module):
             'f_rec': f_rec,
             'g_rec': g_rec,
             'k_rec': k_rec,
+            'b_rec': b_rec,
         }
 
 
 class SharedAndSpecificLoss(nn.Module):
-    def __init__(self, alpha=1.0, beta=1.0, gamma=0.7, lambda_ctr=1.0):
+    def __init__(self, alpha=1.0, beta=1.0, gamma=0.7, lambda_ctr=1.0, lambda_priv=0.3):
         super().__init__()
         self.alpha = alpha
         self.beta = beta
         self.gamma = gamma
         self.lambda_ctr = lambda_ctr
+        self.lambda_priv = lambda_priv
 
     @staticmethod
     def contrastive_loss(shared_1, shared_2, temperature, batch_size):
@@ -166,12 +172,14 @@ class SharedAndSpecificLoss(nn.Module):
         l_shared = 0.0
         l_adv = 0.0
         l_own = 0.0
+        l_priv = 0.0
         for a in (1, 2, 3):
             l_std = l_std + self.reconstruction_loss(out['h_rec'][a], ori[a])
             l_shared = l_shared + self.reconstruction_loss(out['f_rec'][a], ori[a])
             l_adv = l_adv + self.reconstruction_loss(out['g_rec'][a], ori[a])
             l_own = l_own + self.reconstruction_loss(out['k_rec'][a], ori[a])
-        return l_std, l_shared, l_adv, l_own
+            l_priv = l_priv + self.reconstruction_loss(out['b_rec'][a], ori[a])
+        return l_std, l_shared, l_adv, l_own, l_priv
 
     def _contrastive_term(self, out, temperature):
         mlp = out['shared_mlp']
@@ -184,31 +192,35 @@ class SharedAndSpecificLoss(nn.Module):
 
     def step1_loss(self, out, ori):
         """Train g and k only: minimize adversarial reconstruction errors."""
-        l_std, l_shared, l_adv, l_own = self._recon_terms(out, ori)
+        l_std, l_shared, l_adv, l_own, l_priv = self._recon_terms(out, ori)
+        zero = torch.tensor(0.0, device=l_adv.device)
         terms = {
             'l_std': l_std,
             'l_shared': l_shared,
             'l_adv': l_adv,
             'l_own': l_own,
-            'l_ctr': torch.tensor(0.0, device=l_adv.device),
+            'l_priv': l_priv,
+            'l_ctr': zero,
         }
         loss = l_adv + l_own
         return loss, terms
 
     def step2_loss(self, out, ori, temperature):
-        """Train encoders / h / f: constructive terms minus adversary errors."""
-        l_std, l_shared, l_adv, l_own = self._recon_terms(out, ori)
+        """Train encoders / h / f / b: constructive terms minus adversary errors."""
+        l_std, l_shared, l_adv, l_own, l_priv = self._recon_terms(out, ori)
         l_ctr = self._contrastive_term(out, temperature)
         terms = {
             'l_std': l_std,
             'l_shared': l_shared,
             'l_adv': l_adv,
             'l_own': l_own,
+            'l_priv': l_priv,
             'l_ctr': l_ctr,
         }
         loss = (
             l_std
             + self.alpha * l_shared
+            + self.lambda_priv * l_priv
             - self.beta * l_adv
             - self.gamma * l_own
             + self.lambda_ctr * l_ctr

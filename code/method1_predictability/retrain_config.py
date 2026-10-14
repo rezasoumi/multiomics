@@ -37,13 +37,14 @@ def main(args):
     setup_seed(SEED)
     disease = args.disease
     alpha, beta, gamma = args.alpha, args.beta, args.gamma
+    lambda_priv = args.lambda_priv
     lambda_ctr = args.lambda_ctr
     lr, wd = args.lr, args.weight_decay
     epochs, batch = args.epochs, args.batch_size
 
     # Separate folder so we do not overwrite the broken epoch-1 sweep checkpoint
-    name = '{}_{}_a{}_b{}_g{}_l{}_full{}'.format(
-        lr, wd, alpha, beta, gamma, lambda_ctr, epochs
+    name = '{}_{}_a{}_b{}_g{}_p{}_l{}_full{}'.format(
+        lr, wd, alpha, beta, gamma, lambda_priv, lambda_ctr, epochs
     )
     parent = '../../results/models_{}_method1'.format(disease)
     path = os.path.join(parent, name)
@@ -82,14 +83,18 @@ def main(args):
     optimizer_main = torch.optim.Adam(model.main_parameters(), lr=lr, weight_decay=wd)
     optimizer_adv = torch.optim.Adam(model.adversary_parameters(), lr=lr, weight_decay=wd)
     loss_function = SharedAndSpecificLoss(
-        alpha=alpha, beta=beta, gamma=gamma, lambda_ctr=lambda_ctr
+        alpha=alpha,
+        beta=beta,
+        gamma=gamma,
+        lambda_ctr=lambda_ctr,
+        lambda_priv=lambda_priv,
     )
     temperature = 0.4
 
     history_path = os.path.join(path, 'epoch_history.csv')
     hist_fields = [
         'epoch', 'train_loss', 'val_loss', 'val_constructive',
-        'val_std', 'val_shared', 'val_adv', 'val_own', 'val_ctr',
+        'val_std', 'val_shared', 'val_priv', 'val_adv', 'val_own', 'val_ctr',
     ]
     with open(history_path, 'w', newline='') as f:
         csv.DictWriter(f, fieldnames=hist_fields).writeheader()
@@ -134,6 +139,7 @@ def main(args):
             'val_constructive': constructive,
             'val_std': avg_terms['l_std'],
             'val_shared': avg_terms['l_shared'],
+            'val_priv': avg_terms['l_priv'],
             'val_adv': avg_terms['l_adv'],
             'val_own': avg_terms['l_own'],
             'val_ctr': avg_terms['l_ctr'],
@@ -168,7 +174,9 @@ def main(args):
     np.save(os.path.join(path, 'loss.npy'), last_val_loss)
     np.save(
         os.path.join(path, 'hparams.npy'),
-        np.array([lr, wd, alpha, beta, gamma, lambda_ctr, epochs], dtype=object),
+        np.array(
+            [lr, wd, alpha, beta, gamma, lambda_priv, lambda_ctr, epochs], dtype=object
+        ),
     )
 
     meta = {
@@ -176,6 +184,7 @@ def main(args):
         'alpha': alpha,
         'beta': beta,
         'gamma': gamma,
+        'lambda_priv': lambda_priv,
         'lambda_ctr': lambda_ctr,
         'lr': lr,
         'weight_decay': wd,
@@ -239,6 +248,7 @@ if __name__ == '__main__':
     parser.add_argument('--alpha', type=float, default=0.5)
     parser.add_argument('--beta', type=float, default=0.5)
     parser.add_argument('--gamma', type=float, default=2.5)
+    parser.add_argument('--lambda-priv', type=float, default=0.3)
     parser.add_argument('--lambda-ctr', type=float, default=1.0)
     args, unknown = parser.parse_known_args()
     if unknown:

@@ -5,7 +5,7 @@ Loads an existing checkpoint (no training). Prints / saves:
   - subtype linear probes from S_other vs P_other
   - X←S_other vs X←P_other Ridge R² (same as shared_rep_metrics)
   - latent norms / stds (collapse checks)
-  - optional Method-1 decoder probe: recon error of h/f/g/k on test (if available)
+  - optional Method-1 decoder probe: recon error of h/f/g/k/b on test (if available)
 
 Usage examples:
   python diagnose_shared_private.py --method method1 --config 0.0004_0.0007_a0.7_b0.7_g0.7_l1.0
@@ -182,7 +182,7 @@ def load_latents(method, disease, config_dir):
 
 
 def method1_decoder_errors(model, out, views):
-    """Mean MOCSS-style matrix-norm recon error for h/f/g(/k) on the test batch."""
+    """Mean MOCSS-style matrix-norm recon error for h/f/g(/k)/b on the test batch."""
     import torch.nn.functional as F
 
     def recon_err(rec, ori):
@@ -198,7 +198,7 @@ def method1_decoder_errors(model, out, views):
     errs = {}
     if out is None:
         return errs
-    for key in ('h_rec', 'f_rec', 'g_rec', 'k_rec', 'joint_rec'):
+    for key in ('h_rec', 'f_rec', 'g_rec', 'k_rec', 'b_rec', 'joint_rec'):
         if key not in out:
             continue
         total = 0.0

@@ -1,11 +1,12 @@
-"""Hyperparameter sweep for Method 1 VICReg ablation (alpha, beta, lambda_vic).
+"""Hyperparameter sweep for Method 1 VICReg ablation (alpha, beta, lambda_vic, lambda_priv).
 
 Within each config: checkpoint / early-stop on constructive val
-  constructive = L_std + alpha * L_shared + lambda_ctr * L_ctr + lambda_vic * L_vic
+  constructive = L_std + alpha * L_shared + lambda_priv * L_priv
+                 + lambda_ctr * L_ctr + lambda_vic * L_vic
 
 Across configs: rank by fixed core validation loss (exclude VICReg from ranking):
-  eval_loss = L_std + L_shared + L_ctr
-(L_vic is a training regularizer only; not used for ranking).
+  eval_loss = L_std + L_shared + L_priv + L_ctr
+(L_vic and −β L_adv are training regularizers only; not used for ranking).
 Also log clustering / shared-only / probe / alignment metrics for reporting.
 """
 
@@ -47,10 +48,11 @@ LR = {'brca': 0.0004, 'kirc': 0.0002, 'coad': 0.0002, 'lihc': 0.0002}[disease]
 WEIGHT_DECAY = {'brca': 0.0007, 'kirc': 0.0007, 'coad': 0.0007, 'lihc': 0.0007}[disease]
 LAMBDA_CTR = 1.0
 
-# 5 x 5 x 5 = 125 configs
+# 5 x 5 x 5 x 4 = 500 configs
 ALPHA_GRID = [0.3, 0.5, 0.7, 1.0, 1.5]
 BETA_GRID = [0.5, 0.7, 1.0, 1.5, 2.0]
 LAMBDA_VIC_GRID = [0.1, 0.5, 1.0, 2.0, 5.0]
+LAMBDA_PRIV_GRID = [0.1, 0.3, 0.5, 1.0]
 
 MINIMIZE_METRICS = frozenset({'eval_loss', 'val_loss'})
 DEFAULT_RANK_METRIC = 'eval_loss'
@@ -73,6 +75,7 @@ def fixed_eval_loss(avg_terms):
     return float(
         avg_terms['l_std']
         + avg_terms['l_shared']
+        + avg_terms['l_priv']
         + avg_terms['l_ctr']
     )
 
@@ -84,8 +87,10 @@ def setup_seed(seed):
     np.random.seed(seed)
 
 
-def config_name(lr, wd, alpha, beta, lambda_vic, lambda_ctr):
-    return '{}_{}_a{}_b{}_v{}_l{}'.format(lr, wd, alpha, beta, lambda_vic, lambda_ctr)
+def config_name(lr, wd, alpha, beta, lambda_vic, lambda_priv, lambda_ctr):
+    return '{}_{}_a{}_b{}_v{}_p{}_l{}'.format(
+        lr, wd, alpha, beta, lambda_vic, lambda_priv, lambda_ctr
+    )
 
 
 def results_parent():
@@ -129,6 +134,9 @@ def summarize_best(metric=DEFAULT_RANK_METRIC):
         raise FileNotFoundError('No leaderboard at {}'.format(path))
     with open(path, 'r', newline='') as f:
         rows = list(csv.DictReader(f))
+    rows_priv = [r for r in rows if r.get('lambda_priv') not in (None, '')]
+    if rows_priv:
+        rows = rows_priv
     if not rows:
         raise RuntimeError('Leaderboard is empty')
     if metric not in rows[0]:
@@ -145,11 +153,14 @@ def summarize_best(metric=DEFAULT_RANK_METRIC):
     out = {
         'rank_metric': metric,
         'rank_direction': 'min' if minimize else 'max',
-        'eval_loss_definition': 'L_std + L_shared + L_ctr (unweighted; ranking; L_vic excluded)',
+        'eval_loss_definition': (
+            'L_std + L_shared + L_priv + L_ctr (unweighted; ranking; L_vic excluded)'
+        ),
         'config': best['config'],
         'alpha': float(best['alpha']),
         'beta': float(best['beta']),
         'lambda_vic': float(best['lambda_vic']),
+        'lambda_priv': float(best['lambda_priv']),
         'lambda_ctr': float(best['lambda_ctr']),
         'eval_loss': float(best['eval_loss']),
         'val_constructive': float(best['val_loss']),
@@ -201,7 +212,7 @@ def summarize_best(metric=DEFAULT_RANK_METRIC):
     return out
 
 
-def train_one(batch, epochs, lr, wd, alpha, beta, lambda_vic, lambda_ctr):
+def train_one(batch, epochs, lr, wd, alpha, beta, lambda_vic, lambda_priv, lambda_ctr):
     setup_seed(SEED)
     loss_best = np.inf
     best_state = None
@@ -221,7 +232,7 @@ def train_one(batch, epochs, lr, wd, alpha, beta, lambda_vic, lambda_ctr):
     if USE_GPU:
         model = model.cuda()
 
-    name = config_name(lr, wd, alpha, beta, lambda_vic, lambda_ctr)
+    name = config_name(lr, wd, alpha, beta, lambda_vic, lambda_priv, lambda_ctr)
     path = os.path.join(results_parent(), name)
     os.makedirs(path, exist_ok=True)
 
@@ -242,7 +253,11 @@ def train_one(batch, epochs, lr, wd, alpha, beta, lambda_vic, lambda_ctr):
     optimizer_main = torch.optim.Adam(model.main_parameters(), lr=lr, weight_decay=wd)
     optimizer_adv = torch.optim.Adam(model.adversary_parameters(), lr=lr, weight_decay=wd)
     loss_function = SharedAndSpecificLoss(
-        alpha=alpha, beta=beta, lambda_ctr=lambda_ctr, lambda_vic=lambda_vic
+        alpha=alpha,
+        beta=beta,
+        lambda_ctr=lambda_ctr,
+        lambda_vic=lambda_vic,
+        lambda_priv=lambda_priv,
     )
 
     for epoch in range(epochs):
@@ -309,7 +324,9 @@ def train_one(batch, epochs, lr, wd, alpha, beta, lambda_vic, lambda_ctr):
     np.save(os.path.join(path, 'eval_loss.npy'), eval_loss)
     np.save(
         os.path.join(path, 'hparams.npy'),
-        np.array([lr, wd, alpha, beta, lambda_vic, lambda_ctr], dtype=object),
+        np.array(
+            [lr, wd, alpha, beta, lambda_vic, lambda_priv, lambda_ctr], dtype=object
+        ),
     )
     with open(os.path.join(path, 'val_terms.json'), 'w') as f:
         json.dump({k: float(v) for k, v in best_terms.items()}, f, indent=2)
@@ -318,14 +335,15 @@ def train_one(batch, epochs, lr, wd, alpha, beta, lambda_vic, lambda_ctr):
 
 def load_hparams(path):
     h = np.load(os.path.join(path, 'hparams.npy'), allow_pickle=True)
-    # [lr, wd, alpha, beta, lambda_vic, lambda_ctr]
+    # [lr, wd, alpha, beta, lambda_vic, lambda_priv, lambda_ctr]
     return {
         'lr': float(h[0]),
         'wd': float(h[1]),
         'alpha': float(h[2]),
         'beta': float(h[3]),
         'lambda_vic': float(h[4]),
-        'lambda_ctr': float(h[5]),
+        'lambda_priv': float(h[5]),
+        'lambda_ctr': float(h[6]),
     }
 
 
@@ -387,6 +405,7 @@ def compute_eval_loss_from_checkpoint(path, batch=BATCH_SIZE, hparams=None):
         beta=hp['beta'],
         lambda_ctr=hp['lambda_ctr'],
         lambda_vic=hp['lambda_vic'],
+        lambda_priv=hp['lambda_priv'],
     )
     _, _, avg_terms = validation(
         val_loader,
@@ -407,7 +426,7 @@ def compute_eval_loss_from_checkpoint(path, batch=BATCH_SIZE, hparams=None):
 
 
 def build_grid():
-    return list(product(ALPHA_GRID, BETA_GRID, LAMBDA_VIC_GRID))
+    return list(product(ALPHA_GRID, BETA_GRID, LAMBDA_VIC_GRID, LAMBDA_PRIV_GRID))
 
 
 def run_sweep(args):
@@ -418,12 +437,20 @@ def run_sweep(args):
     grid = build_grid()
     total = len(grid)
     print(
-        'Sweep size: {} | alpha={} beta={} lambda_vic={} | lr={} wd={} lambda_ctr={}'.format(
-            total, ALPHA_GRID, BETA_GRID, LAMBDA_VIC_GRID, lr, wd, lambda_ctr
+        'Sweep size: {} | alpha={} beta={} lambda_vic={} lambda_priv={} | '
+        'lr={} wd={} lambda_ctr={}'.format(
+            total,
+            ALPHA_GRID,
+            BETA_GRID,
+            LAMBDA_VIC_GRID,
+            LAMBDA_PRIV_GRID,
+            lr,
+            wd,
+            lambda_ctr,
         )
     )
     print(
-        'Rank metric default: {} = L_std + L_shared + L_ctr (unweighted; no L_vic); '
+        'Rank metric default: {} = L_std + L_shared + L_priv + L_ctr (unweighted; no L_vic); '
         'checkpoint/early-stop still uses constructive (weighted). '
         'Also logs shared-only / probe / alignment metrics.'.format(DEFAULT_RANK_METRIC)
     )
@@ -437,6 +464,7 @@ def run_sweep(args):
         'alpha',
         'beta',
         'lambda_vic',
+        'lambda_priv',
         'lambda_ctr',
         'lr',
         'weight_decay',
@@ -444,8 +472,8 @@ def run_sweep(args):
         'val_loss',
     ] + list(LEADERBOARD_METRIC_KEYS)
 
-    for idx, (alpha, beta, lambda_vic) in enumerate(grid, 1):
-        name = config_name(lr, wd, alpha, beta, lambda_vic, lambda_ctr)
+    for idx, (alpha, beta, lambda_vic, lambda_priv) in enumerate(grid, 1):
+        name = config_name(lr, wd, alpha, beta, lambda_vic, lambda_priv, lambda_ctr)
         print('\n===== [{}/{}] {} ====='.format(idx, total, name))
 
         if name in already:
@@ -464,12 +492,13 @@ def run_sweep(args):
                     'alpha': alpha,
                     'beta': beta,
                     'lambda_vic': lambda_vic,
+                    'lambda_priv': lambda_priv,
                     'lambda_ctr': lambda_ctr,
                 },
             )
         else:
             path, name, val_loss, eval_loss = train_one(
-                batch, epochs, lr, wd, alpha, beta, lambda_vic, lambda_ctr
+                batch, epochs, lr, wd, alpha, beta, lambda_vic, lambda_priv, lambda_ctr
             )
 
         metrics = evaluate_config(disease, path, plot=False)
@@ -492,6 +521,7 @@ def run_sweep(args):
             'alpha': alpha,
             'beta': beta,
             'lambda_vic': lambda_vic,
+            'lambda_priv': lambda_priv,
             'lambda_ctr': lambda_ctr,
             'lr': lr,
             'weight_decay': wd,

@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=method1_sweep
-#SBATCH --time=48:00:00
+#SBATCH --time=96:00:00
 #SBATCH --mem=16G
 #SBATCH --cpus-per-task=4
 #SBATCH --gpus=1
@@ -27,11 +27,12 @@ echo "=== Host: $(hostname)  CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-unset}
 echo "=== PYTHONPATH=${PYTHONPATH} ==="
 python -u -c "import torch; import multiomics.code.method1_predictability.model as m; print('torch', torch.__version__, 'cuda', torch.cuda.is_available(), 'model_ok', m.__file__)"
 
-echo "=== Method 1 sweep: 5x5x5 = 125 predictability-weight configs ==="
-echo "=== Grid: alpha={0.3,0.5,0.7,1.0,1.5} beta={0.5,0.7,1.0,1.5,2.0} gamma={0.7,1.0,1.5,2.0,2.5} ==="
+echo "=== Method 1 sweep: 5x5x5x4 = 500 configs (includes private-sufficiency b / λ_priv) ==="
+echo "=== Grid: alpha beta gamma lambda_priv={0.1,0.3,0.5,1.0} ==="
 echo "=== Fixed: lr/wd=MOCSS-brca defaults, lambda_ctr=1.0, epochs=100 ==="
-echo "=== Checkpoint/early-stop: constructive = L_std + α L_shared + λ_ctr L_ctr ==="
-echo "=== Rank across configs: eval_loss = L_std + L_shared + L_ctr (unweighted) ==="
+echo "=== Checkpoint/early-stop: constructive = L_std + α L_shared + λ_priv L_priv + λ_ctr L_ctr ==="
+echo "=== Rank across configs: eval_loss = L_std + L_shared + L_priv + L_ctr (unweighted) ==="
+echo "=== Config names include _p{lambda_priv}; archive old leaderboard.csv if mixing with pre-b runs ==="
 echo "=== Each config: train -> evaluate -> append leaderboard.csv; --resume skips done ==="
 
 # --resume makes the job safe to requeue if the walltime is hit

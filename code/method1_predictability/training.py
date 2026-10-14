@@ -52,7 +52,9 @@ def train(
     model.train()
     total_loss = 0.0
     total = 0.0
-    sum_terms = {k: 0.0 for k in ('l_std', 'l_shared', 'l_adv', 'l_own', 'l_ctr')}
+    sum_terms = {
+        k: 0.0 for k in ('l_std', 'l_shared', 'l_adv', 'l_own', 'l_priv', 'l_ctr')
+    }
 
     adv_params = list(model.adversary_parameters())
 
@@ -65,7 +67,7 @@ def train(
 
         # ---- Step 1: update g, k only (stop-grad on P, S) ----
         specific_d, shared_d = _detach_codes(specific, shared)
-        h_rec, f_rec, g_rec, k_rec = model.predict_all(specific_d, shared_d)
+        h_rec, f_rec, g_rec, k_rec, b_rec = model.predict_all(specific_d, shared_d)
         out_step1 = {
             'specific': specific_d,
             'shared': shared_d,
@@ -74,17 +76,18 @@ def train(
             'f_rec': f_rec,
             'g_rec': g_rec,
             'k_rec': k_rec,
+            'b_rec': b_rec,
         }
         loss1, _ = loss_function.step1_loss(out_step1, ori)
         optimizer_adv.zero_grad()
         loss1.backward()
         optimizer_adv.step()
 
-        # ---- Step 2: update encoders / h / f / mlp (freeze g, k weights) ----
+        # ---- Step 2: update encoders / h / f / b / mlp (freeze g, k weights) ----
         _set_requires_grad(adv_params, False)
         # Re-encode so graphs are fresh after step-1 optimizer update
         specific, shared, shared_mlp = model.encode_views(view1, view2, view3)
-        h_rec, f_rec, g_rec, k_rec = model.predict_all(specific, shared)
+        h_rec, f_rec, g_rec, k_rec, b_rec = model.predict_all(specific, shared)
         out_step2 = {
             'specific': specific,
             'shared': shared,
@@ -93,6 +96,7 @@ def train(
             'f_rec': f_rec,
             'g_rec': g_rec,
             'k_rec': k_rec,
+            'b_rec': b_rec,
         }
         loss2, terms = loss_function.step2_loss(out_step2, ori, temperature)
         optimizer_main.zero_grad()
@@ -108,13 +112,15 @@ def train(
 
     res = total_loss / total
     print(
-        '\n [Epoch: %3d/%3d] Training Loss: %f | std=%.4f shared=%.4f adv=%.4f own=%.4f ctr=%.4f'
+        '\n [Epoch: %3d/%3d] Training Loss: %f | std=%.4f shared=%.4f priv=%.4f '
+        'adv=%.4f own=%.4f ctr=%.4f'
         % (
             epoch + 1,
             total_epochs,
             res,
             sum_terms['l_std'] / total,
             sum_terms['l_shared'] / total,
+            sum_terms['l_priv'] / total,
             sum_terms['l_adv'] / total,
             sum_terms['l_own'] / total,
             sum_terms['l_ctr'] / total,
@@ -137,7 +143,9 @@ def validation(
     model.eval()
     total_loss = 0.0
     total = 0.0
-    sum_terms = {k: 0.0 for k in ('l_std', 'l_shared', 'l_adv', 'l_own', 'l_ctr')}
+    sum_terms = {
+        k: 0.0 for k in ('l_std', 'l_shared', 'l_adv', 'l_own', 'l_priv', 'l_ctr')
+    }
 
     with torch.no_grad():
         for val_batch in val_loader:
@@ -156,11 +164,12 @@ def validation(
     constructive = (
         avg_terms['l_std']
         + loss_function.alpha * avg_terms['l_shared']
+        + loss_function.lambda_priv * avg_terms['l_priv']
         + loss_function.lambda_ctr * avg_terms['l_ctr']
     )
     print(
         '[Epoch: %3d/%3d] Validation Loss: %f | constructive=%.4f std=%.4f shared=%.4f '
-        'adv=%.4f own=%.4f ctr=%.4f'
+        'priv=%.4f adv=%.4f own=%.4f ctr=%.4f'
         % (
             epoch + 1,
             total_epochs,
@@ -168,6 +177,7 @@ def validation(
             constructive,
             avg_terms['l_std'],
             avg_terms['l_shared'],
+            avg_terms['l_priv'],
             avg_terms['l_adv'],
             avg_terms['l_own'],
             avg_terms['l_ctr'],

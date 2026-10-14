@@ -128,7 +128,7 @@ L_vic   = Σ_m L_vic^m
 - Typical sweep: BRCA, batch 32, 100 epochs, early stop patience 20 / `min_delta=0.005`, seed 21, MOCSS default `lr` / `weight_decay` for the disease.
 - Results under repo-root `results/` (e.g. `results/models_brca_method1/`), not under `code/results/`.
 - **Private branch:** plain AE encoders/decoders (MOCSS-style), **not** OMIDIENT’s Dirichlet private VAE. Fair comparisons in this stage are vs **MOCSS (AE)** only; OMIDIENT mixing is deferred until shared methods are settled.
-- **Ranking default (MOCSS-style):** core unweighted validation loss — Method 1 / Method 1 VICReg: `L_std + L_shared + L_ctr`; Method 2: `L_recon + L_ctr`. **`L_vic` and adversarial (`−β/−γ`) terms are excluded from ranking** (training regularizers only). Checkpoint/early-stop still uses each config’s constructive or weighted val loss. Clustering uses KMeans `n_init=30`.
+- **Ranking default (MOCSS-style):** core unweighted validation loss — Method 1 / Method 1 VICReg: `L_std + L_shared + L_priv + L_ctr`; Method 2: `L_recon + L_ctr`. **`L_vic` and adversarial (`−β/−γ`) terms are excluded from ranking** (training regularizers only). Checkpoint/early-stop still uses each config’s constructive or weighted val loss. Clustering uses KMeans `n_init=30`.
 - **Shared-quality metrics** (see `code/shared_rep_metrics.py`): (1) clustering + kNN on `mean(S)` (`s_nmi`, `s_knn_acc`, …); (2) cross-view probes — subtype from `S_other`, and Ridge R² for `X_A ← (S_B,S_C)` vs `X_A ← (P_B,P_C)`; (3) alignment of shared codes — mean pairwise cosine / CCA / linear CKA.
 
 ---
@@ -144,23 +144,26 @@ L_vic   = Σ_m L_vic^m
 ```
 X_m → Enc → P_m, S_m   (per modality)
 
-Predictors for target modality m (separate networks h, f, g, k):
+Predictors for target modality m (separate networks h, f, g, k, b):
   h_m(P_m, S_m)       → X̂_m   (should predict)       # within-view recon
   f_m(S_m', S_m'')    → X̂_m   (should predict)       # cross-shared sufficiency
   g_m(P_m', P_m'')    → X̂_m   (should NOT predict)   # cross-private adversary
   k_m(S_m)            → X̂_m   (should NOT predict)   # own-shared insufficiency
+  b_m(P_m)            → X̂_m   (should predict)       # own-private sufficiency
 
 Keep shared embedding + MLP projection + contrastive (per modality):
   S_1, S_2, S_3 → MLP → contrastive loss across the 3 projected rows
 ```
 
-The key change vs MOCSS: drop solo `shared_rec` / `specific_rec`. Instead, each modality is explained by four predictability constraints—joint within-view reconstruction (`h`), cross-view shared sufficiency (`f`), cross-view private privacy (`g`), and own-shared insufficiency (`k`).
+The key change vs MOCSS: drop solo `shared_rec` / `specific_rec` as the *definition* of shared vs private. Instead, each modality is explained by predictability constraints—joint within-view reconstruction (`h`), cross-view shared sufficiency (`f`), cross-view private privacy (`g`), own-shared insufficiency (`k`), and **own-private sufficiency** (`b`).
+
+`b` is the explicit anti-collapse term for private codes: without it, `−β L_adv` can drive `P` toward near-constant (uninformative) codes while `h(P,S)` still succeeds using `S` alone.
 
 **No VICReg and no MOCSS orthogonality** in this variant.
 
 ### Predictability Surrogate
 
-For target modality `A`, define four predictors:
+For target modality `A`, define five predictors:
 
 
 | Network | Input      | Target | Role                                                                                                                                                     |
@@ -169,26 +172,30 @@ For target modality `A`, define four predictors:
 | f_A     | (S_B, S_C) | X_A    | **Shared sufficiency**: other views' shared codes should predict A (how strongly is controlled by α)                                                     |
 | g_A     | (P_B, P_C) | X_A    | **Private adversary**: other views' private codes should **not** predict A                                                                               |
 | k_A     | S_A        | X_A    | **Own-shared insufficiency**: own shared code alone should **not** fully reconstruct A (private residual must live in P_A so that h_A can still succeed) |
+| b_A     | P_A        | X_A    | **Own-private sufficiency**: own private code alone should remain informative / reconstructive (weight λ_priv); counters P-collapse under `g`            |
 
 
-Together: shared content is pushed into `S` and out of foreign `P` (`f` + `g`), while private-to-A content is discouraged from sitting in `S_A` alone (`k`) and recovered via `P_A` in `h_A`.
+Together: shared content is pushed into `S` and out of foreign `P` (`f` + `g`), private-to-A content is discouraged from sitting in `S_A` alone (`k`) and **required** to live in `P_A` (`b` + `h`).
+
+Keep `λ_priv` modest so `b` does not recreate MOCSS’s failure mode where private becomes a second full autoencoder of all of `X` (including shared content).
 
 ### Loss Terms
 
-Each of `L_std`, `L_shared`, `L_adv`, `L_own` is the sum over modalities `A ∈ {1,2,3}` of the MOCSS-style reconstruction metric above.
+Each of `L_std`, `L_shared`, `L_adv`, `L_own`, `L_priv` is the sum over modalities `A ∈ {1,2,3}` of the MOCSS-style reconstruction metric above.
 
 ```text
 L_std^A    = recon( h_A(P_A, S_A), X_A )
 L_shared^A = recon( f_A(S_B, S_C), X_A )
 L_adv^A    = recon( g_A(P_B, P_C), X_A )
 L_own^A    = recon( k_A(S_A), X_A )
+L_priv^A   = recon( b_A(P_A), X_A )
 ```
 
 Do **not** optimize a single combined scalar with one joint `backward()` on adversaries. A naive `L = … − β·L_adv − γ·L_own` would also update `g`/`k` to increase their own error. Use the two-step procedure below.
 
 ### Two-Step Training (per batch)
 
-Implemented with **two optimizers** (`optimizer_adv` for `g`/`k`, `optimizer_main` for encoders / `h` / `f` / MLP).
+Implemented with **two optimizers** (`optimizer_adv` for `g`/`k`, `optimizer_main` for encoders / `h` / `f` / `b` / MLP).
 
 **Step 1 — train adversaries only** (`g` and `k`; codes `P`/`S` **detached** so encoders get no gradient):
 
@@ -199,20 +206,21 @@ L_step1 = Σ_A [ L_adv^A + L_own^A ]
 **Step 2 — train encoders and constructive predictors** (`g`/`k` parameters frozen via `requires_grad=False`; fresh encode so the graph is clean):
 
 ```text
-L_step2 = Σ_A [ L_std^A + α·L_shared^A − β·L_adv^A − γ·L_own^A ] + λ_ctr·L_ctr
+L_step2 = Σ_A [ L_std^A + α·L_shared^A + λ_priv·L_priv^A − β·L_adv^A − γ·L_own^A ]
+        + λ_ctr·L_ctr
 ```
 
-Interpretation of the minus signs in step 2: encoders try to make `(P_B, P_C)` uninformative about `X_A` and make `S_A` alone insufficient for full `X_A`, while step 1 keeps `g`/`k` competent predictors. Keep `γ` modest so `k` removes private bleed from `S` without wiping the shared signal that `f` and contrastive need.
+Interpretation of the minus signs in step 2: encoders try to make `(P_B, P_C)` uninformative about `X_A` and make `S_A` alone insufficient for full `X_A`, while step 1 keeps `g`/`k` competent predictors. `+λ_priv·L_priv` forces own `P_A` to stay reconstructive so privacy pressure cannot trivially zero private variance. Keep `γ` modest so `k` removes private bleed from `S` without wiping the shared signal that `f` and contrastive need.
 
 ### Checkpointing (important)
 
 Signed `L_step2` can go **negative** and is a bad early-stop / checkpoint signal (high-γ runs often saved near epoch 1). The code therefore checkpoints and early-stops on a **constructive** validation score:
 
 ```text
-constructive = L_std + α·L_shared + λ_ctr·L_ctr
+constructive = L_std + α·L_shared + λ_priv·L_priv + λ_ctr·L_ctr
 ```
 
-(no `−β L_adv` / `−γ L_own`). Logged terms: `l_std`, `l_shared`, `l_adv`, `l_own`, `l_ctr`.
+(no `−β L_adv` / `−γ L_own`). Logged terms: `l_std`, `l_shared`, `l_priv`, `l_adv`, `l_own`, `l_ctr`.
 
 ### Hyperparameter grids (as implemented)
 
@@ -220,8 +228,16 @@ constructive = L_std + α·L_shared + λ_ctr·L_ctr
 α ∈ {0.3, 0.5, 0.7, 1.0, 1.5}
 β ∈ {0.5, 0.7, 1.0, 1.5, 2.0}
 γ ∈ {0.7, 1.0, 1.5, 2.0, 2.5}
+λ_priv ∈ {0.1, 0.3, 0.5, 1.0}
 λ_ctr = 1.0 (fixed)
-→ 125 configs; results under results/models_{disease}_method1/
+→ 500 configs; results under results/models_{disease}_method1/
+  config name token: …_p{λ_priv}_…
+```
+
+Across-config ranking (label-free):
+
+```text
+eval_loss = L_std + L_shared + L_priv + L_ctr   (unweighted; excludes −β/−γ)
 ```
 
 Optional full retrain without early stop: `retrain_config.py` (saves last-epoch and best-constructive checkpoints).
@@ -231,6 +247,7 @@ Optional full retrain without early stop: `retrain_config.py` (saves last-epoch 
 - **Minimize** L_shared → maximize I(X_A; S_B, S_C) → S captures cross-view predictable content
 - **Maximize** L_adv (via −β in step 2) → minimize I(X_A; P_B, P_C) → private codes of other views don't leak shared signal
 - **Maximize** L_own (via −γ in step 2) → minimize sufficiency of S_A alone for full X_A → private residual is pushed into P_A
+- **Minimize** L_priv → maximize I(X_A; P_A) (lower bound via recon) → own private stays informative / anti-collapse
 - **Minimize** L_std → (P_A, S_A) remain jointly sufficient for X_A
 - **Cross-view shared decoder** `f` forces S to be useful *collectively*, not a per-view full copy of X_m
 
@@ -241,8 +258,9 @@ Optional full retrain without early stop: `retrain_config.py` (saves last-epoch 
 1. **Operational definition of "shared"**: what is predictable from other modalities' S, not what reconstructs locally.
 2. **Explicit anti-leakage** for private codes across views via `g`.
 3. **Explicit own-shared insufficiency** via `k`: unlike MOCSS's solo `shared_rec`, own `S_A` is discouraged from fully reconstructing `X_A`.
-4. **Cross-reconstruction** (`f`) reduces incentive for S_m to duplicate only local detail.
-5. **Theoretically defensible** in a thesis (sufficiency, privacy, minimal shared representation).
+4. **Explicit own-private sufficiency** via `b`: counters the trivial collapse of `P` under `−β L_adv`.
+5. **Cross-reconstruction** (`f`) reduces incentive for S_m to duplicate only local detail.
+6. **Theoretically defensible** in a thesis (sufficiency, privacy, minimal shared representation).
 
 
 
@@ -251,9 +269,10 @@ Optional full retrain without early stop: `retrain_config.py` (saves last-epoch 
 
 | Issue                        | Detail                                                                                                                              |
 | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| **12 predictors**            | 3 modalities × (h, f, g, k) = 12 networks on top of encoders—more parameters; tune α, β, γ                                          |
+| **15 predictors**            | 3 modalities × (h, f, g, k, b) = 15 networks on top of encoders—more parameters; tune α, β, γ, λ_priv                               |
 | **Minimax / two-step**       | Needs the two-step procedure above; naive single backward on −L_adv/−L_own trains adversaries incorrectly; β, γ can still oscillate |
 | **Over-strong k**            | Large γ can strip shared content from S_A, not only private residual—monitor L_own vs L_shared and keep γ modest                    |
+| **Over-strong b**            | Large λ_priv can push shared content back into P (MOCSS-like dual full recon)—keep λ_priv modest and watch subtype S−P / Δ         |
 | **Weak f or g**              | If f is weak, shared may underfit; if g is weak, −L_adv is vacuous                                                                  |
 | **Signed val loss**          | Must use constructive checkpointing; do not early-stop on raw L_step2                                                               |
 | **Contrastive / projection** | MLP projection can still hide some private dims in S; k mitigates but does not prove purity                                         |
@@ -271,7 +290,7 @@ This is Method 1 with:
 
 1. `k` **/** `L_own` **removed** (no own-shared insufficiency adversary).
 2. **VICReg P⊥S** added per modality (same `vicreg_ps_independence` as Method 2).
-3. Predictors kept: `h`**,** `f`**,** `g` **only** (9 predictors instead of 12).
+3. Predictors kept: `h`**,** `f`**,** `g`**,** `b` (12 predictors instead of 15; no `k`).
 
 
 
@@ -283,6 +302,7 @@ X_m → Enc → P_m, S_m
 h_m(P_m, S_m)     → X̂_m   minimize
 f_m(S_m', S_m'')  → X̂_m   minimize (α)
 g_m(P_m', P_m'')  → X̂_m   maximize via −β (adversary)
+b_m(P_m)          → X̂_m   minimize (λ_priv)   # own-private sufficiency
 + L_vic(P_m, S_m)           minimize (λ_vic)
 + L_ctr on MLP(S)           minimize (λ_ctr)
 ```
@@ -296,7 +316,7 @@ Same pattern as Method 1, but step 1 trains `g` **only**:
 ```text
 L_step1 = Σ_A L_adv^A
 
-L_step2 = Σ_A [ L_std^A + α·L_shared^A − β·L_adv^A ]
+L_step2 = Σ_A [ L_std^A + α·L_shared^A + λ_priv·L_priv^A − β·L_adv^A ]
         + λ_ctr·L_ctr + λ_vic·L_vic
 ```
 
@@ -307,10 +327,10 @@ L_step2 = Σ_A [ L_std^A + α·L_shared^A − β·L_adv^A ]
 Constructive (positive) validation score:
 
 ```text
-constructive = L_std + α·L_shared + λ_ctr·L_ctr + λ_vic·L_vic
+constructive = L_std + α·L_shared + λ_priv·L_priv + λ_ctr·L_ctr + λ_vic·L_vic
 ```
 
-(excludes `−β L_adv`). Logged: `l_std`, `l_shared`, `l_adv`, `l_ctr`, `l_vic` (total VICReg; not split into var/cov/cross).
+(excludes `−β L_adv`). Logged: `l_std`, `l_shared`, `l_priv`, `l_adv`, `l_ctr`, `l_vic` (total VICReg; not split into var/cov/cross).
 
 ### Hyperparameter grids (as implemented)
 
@@ -318,8 +338,16 @@ constructive = L_std + α·L_shared + λ_ctr·L_ctr + λ_vic·L_vic
 α ∈ {0.3, 0.5, 0.7, 1.0, 1.5}
 β ∈ {0.5, 0.7, 1.0, 1.5, 2.0}
 λ_vic ∈ {0.1, 0.5, 1.0, 2.0, 5.0}
+λ_priv ∈ {0.1, 0.3, 0.5, 1.0}
 λ_ctr = 1.0 (fixed)
-→ 125 configs; results under results/models_{disease}_method1_vicreg/
+→ 500 configs; results under results/models_{disease}_method1_vicreg/
+  config name token: …_p{λ_priv}_…
+```
+
+Across-config ranking (label-free):
+
+```text
+eval_loss = L_std + L_shared + L_priv + L_ctr   (unweighted; L_vic and −β excluded)
 ```
 
 
@@ -327,7 +355,7 @@ constructive = L_std + α·L_shared + λ_ctr·L_ctr + λ_vic·L_vic
 ### Why this ablation
 
 - Isolates whether **cross-view predictability (**`h`**/**`f`**/**`g`**)** plus **within-view linear independence (VICReg)** is enough without the tricky `k` / `γ` term.
-- VICReg’s variance hinges act as the day-1 anti-collapse for both P and S (see shared VICReg section).
+- VICReg’s variance hinges act as anti-collapse for both P and S; **`b` / `L_priv` adds an explicit reconstructive capacity constraint on P** so privacy pressure from `g` cannot trivially kill private codes.
 
 
 
@@ -336,8 +364,9 @@ constructive = L_std + α·L_shared + λ_ctr·L_ctr + λ_vic·L_vic
 
 | Issue             | Detail                                                                                                                                  |
 | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| No `k`            | Own `S_A` is not explicitly forced to be insufficient for full `X_A`; private bleed into S may remain if `f`/`g`/VICReg do not catch it |
+| No `k`            | Own `S_A` is not explicitly forced to be insufficient for full `X_A`; private bleed into S may remain if `f`/`g`/VICReg/`b` do not catch it |
 | Single `λ_vic`    | Weights var + within-cov + cross together; cannot upweight S variance alone without a code change                                       |
+| Over-strong `b`   | Large λ_priv can refill P with shared content—monitor subtype S−P / Δ                                                                   |
 | Still adversarial | `−β L_adv` needs two-step training and constructive checkpointing                                                                       |
 
 

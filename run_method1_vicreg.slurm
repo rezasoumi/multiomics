@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=m1_vicreg
-#SBATCH --time=48:00:00
+#SBATCH --time=96:00:00
 #SBATCH --mem=16G
 #SBATCH --cpus-per-task=4
 #SBATCH --gpus=1
@@ -24,12 +24,13 @@ mkdir -p ${REPO}/results ${REPO}/logs
 echo "=== Host: $(hostname)  CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-unset} ==="
 python -u -c "import torch; import multiomics.code.method1_vicreg_ablation.model as m; print('torch', torch.__version__, 'cuda', torch.cuda.is_available(), 'model_ok', m.__file__)"
 
-echo "=== Method 1 VICReg ablation sweep: 5x5x5 = 125 configs ==="
-echo "=== No L_own / k; VICReg independence of P and S per modality ==="
-echo "=== Grid: alpha={0.3,0.5,0.7,1.0,1.5} beta={0.5,0.7,1.0,1.5,2.0} lambda_vic={0.1,0.5,1.0,2.0,5.0} ==="
+echo "=== Method 1 VICReg ablation sweep: 5x5x5x4 = 500 configs (includes b / λ_priv) ==="
+echo "=== No L_own / k; VICReg independence of P and S; private sufficiency b(P)->X ==="
+echo "=== Grid: alpha beta lambda_vic lambda_priv={0.1,0.3,0.5,1.0} ==="
 echo "=== Fixed: lr/wd=MOCSS-brca, lambda_ctr=1.0, epochs=100 ==="
-echo "=== Checkpoint/early-stop: constructive = std+α·shared+λ_ctr·ctr+λ_vic·vic ==="
-echo "=== Rank across configs: eval_loss = L_std + L_shared + L_ctr (unweighted; L_vic excluded) ==="
+echo "=== Checkpoint/early-stop: constructive = std+α·shared+λ_priv·priv+λ_ctr·ctr+λ_vic·vic ==="
+echo "=== Rank across configs: eval_loss = L_std + L_shared + L_priv + L_ctr (unweighted; L_vic excluded) ==="
+echo "=== Config names include _p{lambda_priv}; archive old leaderboard.csv if mixing with pre-b runs ==="
 
 python -u hyperparam_tuning.py --epochs 100 --batch-size 32 --resume --rank-metric eval_loss
 

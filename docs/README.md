@@ -4,7 +4,7 @@ Training and evaluation results for the methods described in [`shared-representa
 
 **Private branch (important):** Method 1, Method 1 VICReg ablation, and Method 2 all use a **MOCSS-style plain AE** for private codes `P_m`. They do **not** use OMIDIENT’s Dirichlet private VAE. Fair comparisons in this document are therefore vs **MOCSS (AE)** only. OMIDIENT will be mixed in later once shared methods are settled.
 
-**Ranking:** configs are ranked by **core validation loss** (MOCSS-style; label-free): Method 1 / Method 1 VICReg → `L_std + L_shared + L_ctr`; Method 2 → `L_recon + L_ctr`. VICReg (`L_vic`) and adversarial terms are **not** used for ranking. Clustering/kNN/shared probes are reported on the selected config (KMeans `n_init=30`).
+**Ranking:** configs are ranked by **core validation loss** (MOCSS-style; label-free): Method 1 / Method 1 VICReg → `L_std + L_shared + L_priv + L_ctr`; Method 2 → `L_recon + L_ctr`. VICReg (`L_vic`) and adversarial terms are **not** used for ranking. Clustering/kNN/shared probes are reported on the selected config (KMeans `n_init=30`).
 
 **Shared-quality metrics** (implemented in `code/shared_rep_metrics.py`; fill after re-evaluation):
 
@@ -12,9 +12,25 @@ Training and evaluation results for the methods described in [`shared-representa
 2. Cross-view probes: subtype ← `S_other`; Ridge R² for `X_A ← (S_B,S_C)` vs `X_A ← (P_B,P_C)`
 3. Alignment of shared codes: mean pairwise cosine / CCA / linear CKA
 
-Config name prefixes like `0.0004_0.0007` are learning-rate / weight-decay settings; the remaining tokens encode loss weights (`a`/`b`/`g` = α/β/γ, `l` = λ_ctr, `v` = λ_vic, `r`/`c` = λ_rec / λ_ctr for Method 2).
+Config name prefixes like `0.0004_0.0007` are learning-rate / weight-decay settings; the remaining tokens encode loss weights (`a`/`b`/`g` = α/β/γ, `p` = λ_priv for private-sufficiency `b(P)→X`, `l` = λ_ctr, `v` = λ_vic, `r`/`c` = λ_rec / λ_ctr for Method 2).
 
-> **Note:** Tables below still reflect an earlier eval pass (single KMeans init; no shared-only / probe / alignment columns). Re-run evaluation or sweeps to refresh NMI under `n_init=30` and to populate shared-quality metrics.
+> **Note:** Per-method Top-10 tables below still reflect an earlier eval pass (single KMeans init). The **Compact comparison** uses the diagnostic panel (`n_init=30`, shared/private splits, probes).
+
+---
+
+## Compact comparison
+
+Shared / private diagnostic panel (BRCA). `gap S−PS` = mean(S) NMI − concat(P,S) NMI (large positive ⇒ private hurts integration). `subtype S−P` = subtype←S_other − subtype←P_other. `Δ X R²` = R²(X←S_other) − R²(X←P_other).
+
+| Config | mean(S) NMI | concat(P) NMI | concat(P,S) NMI | gap S−PS | subtype S−P | Δ X R² | CKA |
+| ------ | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| MOCSS | 0.422 | 0.448 | 0.450 | −0.03 | +0.02 | +0.06 | 0.75 |
+| M1 loss-best (a0.7 b0.7 g0.7) | 0.442 | 0.109 | 0.163 | +0.28 | +0.14 | +0.12 | 0.40 |
+| M1 #3 (a1.0 b1.0 g0.7) | 0.451 | 0.188 | 0.395 | +0.06 | +0.23 | −0.06 | 0.70 |
+| VICReg loss-best | 0.452 | 0.243 | 0.336 | +0.12 | +0.21 | −0.34 | 0.77 |
+| VICReg #10 | 0.421 | 0.236 | 0.421 | ~0 | +0.20 | −0.21 | 0.73 |
+| M2 loss-best | 0.394 | 0.408 | 0.420 | −0.03 | +0.02 | +0.10 | 0.79 |
+| M2 high-NMI (r0.5 c0.5 v0.1) | 0.412 | 0.382 | 0.456 | −0.04 | ~0 | +0.09 | 0.82 |
 
 ---
 
@@ -161,13 +177,6 @@ Package: `code/method2_joint_vicreg/`. Private encoders: plain AE (MOCSS-style).
 
 ---
 
-## Shared-quality metrics (to fill after re-eval)
+## Shared-quality metrics
 
-After re-running `evaluate.py` / sweeps, report for each method’s best-by-NMI config:
-
-| Method | s_nmi | s_knn | subtype←S_other | X←S R² | X←P R² | Δ(S−P) | cosine | CCA | CKA |
-| ------ | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| MOCSS (AE) | — | — | — | — | — | — | — | — | — |
-| Method 1 | — | — | — | — | — | — | — | — | — |
-| Method 1 VICReg | — | — | — | — | — | — | — | — | — |
-| Method 2 | — | — | — | — | — | — | — | — | — |
+See **Compact comparison** above (diagnostic panel with mean(S) / concat(P) / concat(P,S), probes, CKA).
