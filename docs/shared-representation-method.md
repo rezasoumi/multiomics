@@ -127,7 +127,9 @@ L_vic   = Σ_m L_vic^m
 - Init: Kaiming normal on Linear weights; zero biases.
 - Typical sweep: BRCA, batch 32, 100 epochs, early stop patience 20 / `min_delta=0.005`, seed 21, MOCSS default `lr` / `weight_decay` for the disease.
 - Results under repo-root `results/` (e.g. `results/models_brca_method1/`), not under `code/results/`.
-- **Private branch:** plain AE encoders/decoders (MOCSS-style), **not** OMIDIENT’s Dirichlet private VAE. Fair comparisons in this stage are vs **MOCSS (AE)** only; OMIDIENT mixing is deferred until shared methods are settled.
+- **Private branch (Methods 1 / 1-VICReg / 2):** plain AE encoders/decoders (MOCSS-style) for fair comparison vs **MOCSS (AE)**.
+- **OMIDIENT benchmark:** evaluate existing ProdGammaDirVae checkpoints with the same `shared_rep_metrics` suite (`code/prod_gamma_dirvae/evaluate.py`).
+- **Method 2 + OMIDIENT private (joint):** Dirichlet private + Method-2 shared/joint objective (`code/method2_omidient_private/`); see dedicated section below.
 - **Ranking default (MOCSS-style):** core unweighted validation loss — Method 1 / Method 1 VICReg: `L_std + L_shared + L_priv + L_ctr`; Method 2: `L_recon + L_ctr`. **`L_vic` and adversarial (`−β/−γ`) terms are excluded from ranking** (training regularizers only). Checkpoint/early-stop still uses each config’s constructive or weighted val loss. Clustering uses KMeans `n_init=30`.
 - **Shared-quality metrics** (see `code/shared_rep_metrics.py`): (1) clustering + kNN on `mean(S)` (`s_nmi`, `s_knn_acc`, …); (2) cross-view probes — subtype from `S_other`, and Ridge R² for `X_A ← (S_B,S_C)` vs `X_A ← (P_B,P_C)`; (3) alignment of shared codes — mean pairwise cosine / CCA / linear CKA.
 
@@ -465,22 +467,68 @@ Results under `results/models_{disease}_method2/` with folder names `{lr}_{wd}_r
 
 
 
+## Method 2 + OMIDIENT private (joint train)
+
+**Code:** `code/method2_omidient_private/` · **Slurm:** `run_method2_omidient.slurm`  
+**OMIDIENT-only benchmark (no retrain):** `code/prod_gamma_dirvae/evaluate.py` · `run_omidient_eval.slurm`
+
+### Idea
+
+Keep Method 2’s shared story (AE shared encoder + MLP contrastive + **one joint** `D(concat(P,S))` + VICReg) and replace only the private encoder with OMIDIENT’s **product-Dirichlet** private branch. Train **jointly** (do not stitch frozen OMIDIENT `P` with a separately trained Method-2 `S`).
+
+```text
+X_m → shared AE Enc → S_m (emb=32) → MLP → L_ctr
+X_m → Dirichlet priv Enc → P_m (K·8; K=4 → dim 32), alphas → L_kl
+concat(P_m, S_m) → joint Dec → X̂_m → L_recon
+L_vic(P_m, S_m)
+```
+
+### Loss
+
+```text
+L = λ_rec·L_recon + λ_ctr·L_ctr + λ_vic·L_vic + λ_kl·L_kl
+```
+
+- `L_kl`: same product-Dirichlet / gamma-KL style as OMIDIENT (`prior_alpha=0.5`, default `λ_kl=1.0`).
+- No solo shared/specific recon (unlike full OMIDIENT / MOCSS).
+- Checkpoint / early-stop on full weighted val loss (all terms positive).
+- Rank configs by `eval_loss = L_recon + L_ctr` (`L_vic` and `L_kl` excluded).
+
+### Hyperparameters (as implemented)
+
+```text
+λ_rec ∈ {0.3, 0.5, 0.7, 1.0, 1.5}
+λ_ctr ∈ {0.5, 0.7, 1.0, 1.5, 2.0}
+λ_vic ∈ {0.1, 0.5, 1.0, 2.0, 5.0}
+K = 4 (fixed; BRCA OMIDIENT default), λ_kl = 1.0 (fixed)
+→ 125 configs under results/models_{disease}_method2_omidient/
+  config name: {lr}_{wd}_r{}_c{}_v{}_k{K}
+```
+
+### Why not Method 1 + Dirichlet first
+
+Method 1’s predictors (`h/f/g/k/b`) and two-step adversaries assume deterministic fixed-dim private codes. Stochastic Dirichlet `P`, KL, and different private geometry make a clean Method-1 hybrid much harder; Method 2 is the intended first mix-in.
+
+---
+
+
+
 ## Method comparison (quick)
 
 
-|                       | Method 1                      | Method 1 ablation | Method 2              |
-| --------------------- | ----------------------------- | ----------------- | --------------------- |
-| Private branch        | MOCSS AE                      | MOCSS AE          | MOCSS AE              |
-| Joint / solo recon    | `h(P,S)`; no solo MOCSS recon | same              | `D(concat(P,S))` only |
-| Cross-shared `f`      | yes                           | yes               | no                    |
-| Private adversary `g` | yes                           | yes               | no                    |
-| Own-shared `k`        | yes                           | **no**            | no                    |
-| VICReg P⊥S            | no                            | yes               | yes                   |
-| MOCSS ortho           | no                            | no                | no                    |
-| Training              | 2-step, 2 opts                | 2-step, 2 opts    | 1-step, 1 opt         |
-| Checkpoint            | constructive                  | constructive      | raw val loss          |
-| Sweep knobs           | α, β, γ                       | α, β, λ_vic       | λ_rec, λ_ctr, λ_vic   |
-| Rank configs by       | `L_std+L_shared+L_ctr`        | same (no `L_vic`) | `L_recon+L_ctr` (no `L_vic`) |
+|                       | Method 1                      | Method 1 ablation | Method 2              | Method 2 + OMIDIENT priv |
+| --------------------- | ----------------------------- | ----------------- | --------------------- | ------------------------ |
+| Private branch        | MOCSS AE                      | MOCSS AE          | MOCSS AE              | product-Dirichlet        |
+| Joint / solo recon    | `h(P,S)`; no solo MOCSS recon | same              | `D(concat(P,S))` only | same + KL                |
+| Cross-shared `f`      | yes                           | yes               | no                    | no                       |
+| Private adversary `g` | yes                           | yes               | no                    | no                       |
+| Own-shared `k`        | yes                           | **no**            | no                    | no                       |
+| VICReg P⊥S            | no                            | yes               | yes                   | yes                      |
+| MOCSS ortho           | no                            | no                | no                    | no                       |
+| Training              | 2-step, 2 opts                | 2-step, 2 opts    | 1-step, 1 opt         | 1-step, 1 opt            |
+| Checkpoint            | constructive                  | constructive      | raw val loss          | raw val loss             |
+| Sweep knobs           | α, β, γ (, λ_priv)            | α, β, λ_vic (, λ_priv) | λ_rec, λ_ctr, λ_vic | same + fixed K, λ_kl |
+| Rank configs by       | `L_std+L_shared(+L_priv)+L_ctr` | same (no `L_vic`) | `L_recon+L_ctr` (no `L_vic`) | same (no `L_vic`/`L_kl`) |
 
 
 ### Evaluation protocol (`code/shared_rep_metrics.py`)

@@ -2,19 +2,19 @@
 
 Training and evaluation results for the methods described in [`shared-representation-method.md`](./shared-representation-method.md). Metrics are reported on the BRCA multi-omics setting used in this repository.
 
-**Private branch (important):** Method 1, Method 1 VICReg ablation, and Method 2 all use a **MOCSS-style plain AE** for private codes `P_m`. They do **not** use OMIDIENT’s Dirichlet private VAE. Fair comparisons in this document are therefore vs **MOCSS (AE)** only. OMIDIENT will be mixed in later once shared methods are settled.
+**Private branch (important):** Method 1, Method 1 VICReg ablation, and Method 2 (AE private) use a **MOCSS-style plain AE** for `P_m`. Fair AE-private comparisons are vs **MOCSS (AE)**. **OMIDIENT** (Dirichlet private + MOCSS shared) is benchmarked with the same `shared_rep_metrics` suite (`code/prod_gamma_dirvae/evaluate.py`, `run_omidient_eval.slurm`). **Method 2 + OMIDIENT private** jointly trains Method-2 shared/joint-decode with OMIDIENT product-Dirichlet private (`code/method2_omidient_private/`, `run_method2_omidient.slurm`); results TBD.
 
-**Ranking:** configs are ranked by **core validation loss** (MOCSS-style; label-free): Method 1 / Method 1 VICReg → `L_std + L_shared + L_priv + L_ctr`; Method 2 → `L_recon + L_ctr`. VICReg (`L_vic`) and adversarial terms are **not** used for ranking. Clustering/kNN/shared probes are reported on the selected config (KMeans `n_init=30`).
+**Ranking:** configs are ranked by **core validation loss** (MOCSS-style; label-free). For the tables below (pre–private-sufficiency sweeps): Method 1 / Method 1 VICReg → `L_std + L_shared + L_ctr`; Method 2 → `L_recon + L_ctr`. VICReg (`L_vic`) and adversarial terms are **not** used for ranking. Clustering/kNN/shared probes are reported on the selected config (KMeans `n_init=30`).
 
-**Shared-quality metrics** (implemented in `code/shared_rep_metrics.py`; fill after re-evaluation):
+**`b_m(P_m) → X_m` (private sufficiency):** Method 1 and Method 1 VICReg numbers in this README are **without** the private-sufficiency head `b_m`. Results **with** `b_m(P_m) → X_m` (and `λ_priv` in ranking) will be added after the new sweeps finish.
+
+**Shared-quality metrics** (implemented in `code/shared_rep_metrics.py`):
 
 1. Clustering + kNN on `mean(S)` (`s_nmi`, `s_knn_acc`, …)
 2. Cross-view probes: subtype ← `S_other`; Ridge R² for `X_A ← (S_B,S_C)` vs `X_A ← (P_B,P_C)`
 3. Alignment of shared codes: mean pairwise cosine / CCA / linear CKA
 
-Config name prefixes like `0.0004_0.0007` are learning-rate / weight-decay settings; the remaining tokens encode loss weights (`a`/`b`/`g` = α/β/γ, `p` = λ_priv for private-sufficiency `b(P)→X`, `l` = λ_ctr, `v` = λ_vic, `r`/`c` = λ_rec / λ_ctr for Method 2).
-
-> **Note:** Per-method Top-10 tables below still reflect an earlier eval pass (single KMeans init). The **Compact comparison** uses the diagnostic panel (`n_init=30`, shared/private splits, probes).
+Config name prefixes like `0.0004_0.0007` are learning-rate / weight-decay settings; the remaining tokens encode loss weights (`a`/`b`/`g` = α/β/γ, `p` = λ_priv for private-sufficiency `b(P)→X` when present, `l` = λ_ctr, `v` = λ_vic, `r`/`c` = λ_rec / λ_ctr for Method 2).
 
 ---
 
@@ -34,106 +34,94 @@ Shared / private diagnostic panel (BRCA). `gap S−PS` = mean(S) NMI − concat(
 
 ---
 
-## Summary (best by NMI)
+## Summary (best by eval_loss)
 
-| Method | Best config | NMI | ARI | Acc | kNN |
-| ------ | ----------- | ---: | ---: | ---: | ---: |
-| MOCSS (AE) | — | 0.4550 | 0.3730 | 0.6343 | 0.73 |
-| Method 1 (4 networks) | `0.0004_0.0007_a0.5_b0.5_g2.5_l1.0` | 0.4438 | 0.3466 | 0.5943 | 0.70 |
-| Method 1 VICReg ablation | `0.0004_0.0007_a0.5_b1.5_v0.5_l1.0` | 0.4839 | 0.5083 | 0.6857 | 0.66 |
-| Method 2 | `0.0004_0.0007_r0.5_c0.5_v0.1` | 0.4680 | 0.3820 | 0.6743 | 0.75 |
+| Method | Best config | concat NMI | s_nmi | ARI | Acc | kNN | eval_loss |
+| ------ | ----------- | ---: | ---: | ---: | ---: | ---: | ---: |
+| MOCSS (AE) | `0.0004_0.0007` | 0.4496 | 0.4219 | 0.3034 | 0.5429 | 0.73 | — |
+| Method 1 (pre-`b_m`) | `0.0004_0.0007_a0.7_b0.7_g0.7_l1.0` | 0.1633 | 0.4424 | 0.0735 | 0.3886 | 0.68 | 0.8118 |
+| Method 1 VICReg (pre-`b_m`) | `0.0004_0.0007_a1.0_b0.5_v0.1_l1.0` | 0.3357 | 0.4517 | 0.2031 | 0.4800 | 0.73 | 0.7728 |
+| Method 2 | `0.0004_0.0007_r1.5_c0.5_v0.1` | 0.4199 | 0.3944 | 0.2806 | 0.5200 | 0.70 | 0.4693 |
 
 ---
 
 ## Baseline: MOCSS (AE)
 
-Plain multi-omics contrastive shared–specific autoencoder (same private AE family as the methods below).
+Plain multi-omics contrastive shared–specific autoencoder (same private AE family as the methods below). Config: `0.0004_0.0007`.
 
-| nmi | ari | f_score | acc | v_measure | knn_acc |
-| ---: | ---: | ---: | ---: | ---: | ---: |
-| 0.4550 | 0.3730 | 0.5349 | 0.6343 | 0.4550 | 0.73 |
+| | nmi | ari | f_score | acc | knn |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| concat(P,S) | 0.4496 | 0.3034 | 0.4783 | 0.5429 | 0.73 |
+| mean(S) | 0.4219 | 0.3362 | — | 0.5943 | 0.73 |
+
+Probes: subtype←S_other = 0.7424 | X←S R² = −0.0742 | X←P R² = −0.1314 | Δ(S−P) = 0.0573  
+Alignment: cosine = −0.0350 | CCA = 0.9730 | CKA = 0.7531
 
 ---
 
-## Method 1 (4 networks)
+## Method 1 (4 networks) — without `b_m`
 
 Package: `code/method1_predictability/` (full predictability with own-network term). Private encoders: plain AE (MOCSS-style).
 
-### Top 10 by NMI
+**Note:** These results are **before** adding private-sufficiency `b_m(P_m) → X_m`. Post-`b_m` sweeps will be reported later.
 
-| Rank | Config | NMI | ARI | Acc | kNN | val_loss |
-| ---: | ------ | ---: | ---: | ---: | ---: | ---: |
-| 1 | `0.0004_0.0007_a0.5_b0.5_g2.5_l1.0` | 0.4438 | 0.3466 | 0.5943 | 0.70 | −0.6724 |
-| 2 | `0.0004_0.0007_a0.3_b0.5_g2.0_l1.0` | 0.4292 | 0.2878 | 0.5657 | 0.70 | −0.4779 |
-| 3 | `0.0004_0.0007_a0.5_b0.5_g1.5_l1.0` | 0.4157 | 0.3023 | 0.6000 | 0.68 | −0.0215 |
-| 4 | `0.0004_0.0007_a0.3_b0.5_g1.5_l1.0` | 0.4130 | 0.2853 | 0.5257 | 0.73 | −0.1398 |
-| 5 | `0.0004_0.0007_a0.3_b0.5_g2.5_l1.0` | 0.4119 | 0.3402 | 0.6400 | 0.73 | −0.7940 |
-| 6 | `0.0004_0.0007_a1.0_b1.0_g0.7_l1.0` | 0.4110 | 0.3323 | 0.6343 | 0.70 | 0.1715 |
-| 7 | `0.0004_0.0007_a0.7_b0.5_g2.0_l1.0` | 0.4083 | 0.3225 | 0.6514 | 0.64 | −0.2322 |
-| 8 | `0.0004_0.0007_a0.7_b0.5_g2.5_l1.0` | 0.4027 | 0.3015 | 0.6343 | 0.68 | −0.5600 |
-| 9 | `0.0004_0.0007_a0.5_b0.5_g2.0_l1.0` | 0.3990 | 0.3461 | 0.6457 | 0.73 | −0.3449 |
-| 10 | `0.0004_0.0007_a1.5_b1.0_g1.0_l1.0` | 0.3947 | 0.2940 | 0.5543 | 0.70 | 0.2315 |
+### Top 10 by eval_loss
 
-**Best (NMI):** `0.0004_0.0007_a0.5_b0.5_g2.5_l1.0`
+| Rank | Config | NMI | s_nmi | ARI | Acc | kNN | eval_loss |
+| ---: | ------ | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | `0.0004_0.0007_a0.7_b0.7_g0.7_l1.0` | 0.1633 | 0.4424 | 0.0735 | 0.3886 | 0.68 | 0.8118 |
+| 2 | `0.0004_0.0007_a1.5_b1.5_g0.7_l1.0` | 0.3181 | 0.4371 | 0.2089 | 0.4971 | 0.68 | 0.8141 |
+| 3 | `0.0004_0.0007_a1.0_b1.0_g0.7_l1.0` | 0.3951 | 0.4507 | 0.3425 | 0.6229 | 0.70 | 0.8170 |
+| 4 | `0.0004_0.0007_a1.5_b0.7_g0.7_l1.0` | 0.3009 | 0.3844 | 0.1761 | 0.4686 | 0.66 | 0.8196 |
+| 5 | `0.0004_0.0007_a1.0_b0.5_g0.7_l1.0` | 0.2393 | 0.3987 | 0.1195 | 0.4629 | 0.66 | 0.8227 |
+| 6 | `0.0004_0.0007_a1.0_b1.5_g0.7_l1.0` | 0.3266 | 0.4351 | 0.1885 | 0.4800 | 0.73 | 0.8267 |
+| 7 | `0.0004_0.0007_a1.5_b2.0_g0.7_l1.0` | 0.3319 | 0.4214 | 0.1814 | 0.5029 | 0.68 | 0.8300 |
+| 8 | `0.0004_0.0007_a1.5_b1.0_g0.7_l1.0` | 0.3333 | 0.3867 | 0.1831 | 0.4571 | 0.66 | 0.8312 |
+| 9 | `0.0004_0.0007_a1.5_b0.5_g0.7_l1.0` | 0.2775 | 0.3773 | 0.1680 | 0.4629 | 0.59 | 0.8350 |
+| 10 | `0.0004_0.0007_a1.5_b0.7_g1.0_l1.0` | 0.2759 | 0.4100 | 0.1601 | 0.4857 | 0.64 | 0.8386 |
 
-```json
-{
-  "rank_metric": "nmi",
-  "config": "0.0004_0.0007_a0.5_b0.5_g2.5_l1.0",
-  "alpha": 0.5,
-  "beta": 0.5,
-  "gamma": 2.5,
-  "lambda_ctr": 1.0,
-  "val_loss": -0.672432792186737,
-  "nmi": 0.4437890490849838,
-  "ari": 0.34655194079713575,
-  "f_score": 0.5181688693772225,
-  "acc": 0.5942857142857143,
-  "knn_acc": 0.7045454545454546,
-  "ch_index": 33.50923298570472
-}
-```
+**Best (eval_loss):** `0.0004_0.0007_a0.7_b0.7_g0.7_l1.0`
+
+| | nmi | ari | f_score | acc | knn |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| concat(P,S) | 0.1633 | 0.0735 | 0.2992 | 0.3886 | 0.68 |
+| mean(S) | 0.4424 | 0.3296 | — | 0.5829 | 0.66 |
+
+Probes: subtype←S_other = 0.7652 | X←S R² = 0.0806 | X←P R² = −0.0360 | Δ(S−P) = 0.1166  
+Alignment: cosine = −0.0778 | CCA = 0.9777 | CKA = 0.3997
 
 ---
 
-## Method 1 VICReg ablation (no own network)
+## Method 1 VICReg ablation (no own network) — without `b_m`
 
 Package: `code/method1_vicreg_ablation/`. Results directory: `results/models_brca_method1_vicreg/`. Private encoders: plain AE (MOCSS-style).
 
-### Top 10 by NMI
+**Note:** These results are **before** adding private-sufficiency `b_m(P_m) → X_m`. Post-`b_m` sweeps will be reported later.
 
-| Rank | Config | NMI | ARI | Acc | kNN | constructive |
-| ---: | ------ | ---: | ---: | ---: | ---: | ---: |
-| 1 | `0.0004_0.0007_a0.5_b1.5_v0.5_l1.0` | 0.4839 | 0.5083 | 0.6857 | 0.66 | 0.7057 |
-| 2 | `0.0004_0.0007_a0.5_b2.0_v0.5_l1.0` | 0.4672 | 0.3402 | 0.6686 | 0.64 | 0.7065 |
-| 3 | `0.0004_0.0007_a0.3_b2.0_v0.1_l1.0` | 0.4672 | 0.3217 | 0.5829 | 0.70 | 0.5923 |
-| 4 | `0.0004_0.0007_a0.7_b1.5_v0.1_l1.0` | 0.4657 | 0.3263 | 0.5714 | 0.70 | 0.7088 |
-| 5 | `0.0004_0.0007_a1.0_b1.5_v0.1_l1.0` | 0.4636 | 0.4626 | 0.6629 | 0.64 | 0.7943 |
-| 6 | `0.0004_0.0007_a0.5_b1.5_v1.0_l1.0` | 0.4623 | 0.3811 | 0.6857 | 0.68 | 0.7654 |
-| 7 | `0.0004_0.0007_a1.5_b2.0_v0.1_l1.0` | 0.4595 | 0.4509 | 0.6800 | 0.73 | 0.9440 |
-| 8 | `0.0004_0.0007_a0.7_b2.0_v0.1_l1.0` | 0.4540 | 0.4437 | 0.6571 | 0.68 | 0.7083 |
-| 9 | `0.0004_0.0007_a0.5_b2.0_v0.1_l1.0` | 0.4521 | 0.4385 | 0.6743 | 0.70 | 0.6502 |
-| 10 | `0.0004_0.0007_a0.7_b2.0_v1.0_l1.0` | 0.4442 | 0.3183 | 0.5771 | 0.68 | 0.8263 |
+### Top 10 by eval_loss
 
-**Best (NMI):** `0.0004_0.0007_a0.5_b1.5_v0.5_l1.0`
+| Rank | Config | NMI | s_nmi | ARI | Acc | kNN | eval_loss |
+| ---: | ------ | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | `0.0004_0.0007_a1.0_b0.5_v0.1_l1.0` | 0.3357 | 0.4517 | 0.2031 | 0.4800 | 0.73 | 0.7728 |
+| 2 | `0.0004_0.0007_a1.5_b0.7_v0.1_l1.0` | 0.3634 | 0.4111 | 0.2031 | 0.4800 | 0.68 | 0.7754 |
+| 3 | `0.0004_0.0007_a0.5_b0.5_v0.1_l1.0` | 0.3112 | 0.4437 | 0.1748 | 0.4857 | 0.66 | 0.7766 |
+| 4 | `0.0004_0.0007_a1.5_b0.5_v0.1_l1.0` | 0.3130 | 0.4136 | 0.1760 | 0.4914 | 0.70 | 0.7767 |
+| 5 | `0.0004_0.0007_a0.5_b0.7_v0.1_l1.0` | 0.3604 | 0.4363 | 0.2185 | 0.5143 | 0.77 | 0.7772 |
+| 6 | `0.0004_0.0007_a0.7_b0.5_v0.1_l1.0` | 0.3185 | 0.4283 | 0.1962 | 0.5143 | 0.64 | 0.7778 |
+| 7 | `0.0004_0.0007_a1.0_b1.0_v0.1_l1.0` | 0.3165 | 0.4128 | 0.1804 | 0.4800 | 0.70 | 0.7783 |
+| 8 | `0.0004_0.0007_a0.7_b0.7_v0.1_l1.0` | 0.3238 | 0.4181 | 0.1843 | 0.4857 | 0.75 | 0.7790 |
+| 9 | `0.0004_0.0007_a1.0_b0.7_v0.1_l1.0` | 0.2984 | 0.4398 | 0.1913 | 0.4914 | 0.73 | 0.7794 |
+| 10 | `0.0004_0.0007_a1.0_b1.5_v0.1_l1.0` | 0.4206 | 0.4212 | 0.2790 | 0.5314 | 0.64 | 0.7802 |
 
-```json
-{
-  "rank_metric": "nmi",
-  "config": "0.0004_0.0007_a0.5_b1.5_v0.5_l1.0",
-  "alpha": 0.5,
-  "beta": 1.5,
-  "lambda_vic": 0.5,
-  "lambda_ctr": 1.0,
-  "val_constructive": 0.7056930460035801,
-  "nmi": 0.48387043844661665,
-  "ari": 0.5083233906216597,
-  "f_score": 0.6462308635553173,
-  "acc": 0.6857142857142857,
-  "knn_acc": 0.6590909090909091,
-  "ch_index": 37.396597252809066
-}
-```
+**Best (eval_loss):** `0.0004_0.0007_a1.0_b0.5_v0.1_l1.0`
+
+| | nmi | ari | f_score | acc | knn |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| concat(P,S) | 0.3357 | 0.2031 | 0.4051 | 0.4800 | 0.73 |
+| mean(S) | 0.4517 | 0.3090 | — | 0.5314 | 0.66 |
+
+Probes: subtype←S_other = 0.7576 | X←S R² = −0.2093 | X←P R² = 0.1270 | Δ(S−P) = −0.3363  
+Alignment: cosine = −0.0764 | CCA = 0.9807 | CKA = 0.7689
 
 ---
 
@@ -141,42 +129,52 @@ Package: `code/method1_vicreg_ablation/`. Results directory: `results/models_brc
 
 Package: `code/method2_joint_vicreg/`. Private encoders: plain AE (MOCSS-style).
 
-### Top 10 by NMI
+### Top 10 by eval_loss
 
-| Rank | Config | NMI | ARI | Acc | kNN | val |
-| ---: | ------ | ---: | ---: | ---: | ---: | ---: |
-| 1 | `0.0004_0.0007_r0.5_c0.5_v0.1` | 0.4680 | 0.3820 | 0.6743 | 0.75 | 0.2479 |
-| 2 | `0.0004_0.0007_r1.5_c0.7_v0.5` | 0.4623 | 0.3068 | 0.5829 | 0.84 | 0.5617 |
-| 3 | `0.0004_0.0007_r0.7_c2.0_v0.1` | 0.4619 | 0.4464 | 0.6743 | 0.70 | 0.6774 |
-| 4 | `0.0004_0.0007_r0.5_c1.5_v1.0` | 0.4605 | 0.3580 | 0.6629 | 0.70 | 0.5652 |
-| 5 | `0.0004_0.0007_r1.5_c0.5_v0.5` | 0.4604 | 0.3723 | 0.6629 | 0.77 | 0.5120 |
-| 6 | `0.0004_0.0007_r0.7_c0.7_v0.1` | 0.4551 | 0.3172 | 0.5771 | 0.73 | 0.3444 |
-| 7 | `0.0004_0.0007_r1.5_c1.0_v0.5` | 0.4528 | 0.3136 | 0.6171 | 0.80 | 0.6380 |
-| 8 | `0.0004_0.0007_r1.0_c0.7_v0.1` | 0.4481 | 0.3770 | 0.6514 | 0.75 | 0.4096 |
-| 9 | `0.0004_0.0007_r0.3_c1.5_v0.1` | 0.4478 | 0.3748 | 0.6857 | 0.75 | 0.4545 |
-| 10 | `0.0004_0.0007_r0.5_c2.0_v0.1` | 0.4463 | 0.3605 | 0.6743 | 0.73 | 0.6260 |
+| Rank | Config | NMI | s_nmi | ARI | Acc | kNN | eval_loss |
+| ---: | ------ | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | `0.0004_0.0007_r1.5_c0.5_v0.1` | 0.4199 | 0.3944 | 0.2806 | 0.5200 | 0.70 | 0.4693 |
+| 2 | `0.0004_0.0007_r1.5_c0.7_v0.1` | 0.4115 | 0.4304 | 0.2650 | 0.5143 | 0.68 | 0.4725 |
+| 3 | `0.0004_0.0007_r1.0_c0.7_v0.1` | 0.4120 | 0.3956 | 0.2687 | 0.5200 | 0.75 | 0.4756 |
+| 4 | `0.0004_0.0007_r1.5_c1.0_v0.1` | 0.4208 | 0.3809 | 0.2814 | 0.5486 | 0.75 | 0.4761 |
+| 5 | `0.0004_0.0007_r0.7_c0.5_v0.1` | 0.4348 | 0.3960 | 0.2962 | 0.5543 | 0.70 | 0.4772 |
+| 6 | `0.0004_0.0007_r1.0_c0.5_v0.1` | 0.4427 | 0.4177 | 0.3011 | 0.5371 | 0.68 | 0.4774 |
+| 7 | `0.0004_0.0007_r1.0_c1.0_v0.1` | 0.4478 | 0.4485 | 0.3582 | 0.6400 | 0.75 | 0.4786 |
+| 8 | `0.0004_0.0007_r0.5_c0.5_v0.1` | 0.4562 | 0.4117 | 0.3489 | 0.6400 | 0.75 | 0.4790 |
+| 9 | `0.0004_0.0007_r0.7_c0.7_v0.1` | 0.4551 | 0.4116 | 0.3172 | 0.5771 | 0.73 | 0.4793 |
+| 10 | `0.0004_0.0007_r0.5_c2.0_v0.1` | 0.4551 | 0.4456 | 0.3052 | 0.5714 | 0.73 | 0.4794 |
 
-**Best (NMI):** `0.0004_0.0007_r0.5_c0.5_v0.1`
+**Best (eval_loss):** `0.0004_0.0007_r1.5_c0.5_v0.1`
 
-```json
-{
-  "rank_metric": "nmi",
-  "config": "0.0004_0.0007_r0.5_c0.5_v0.1",
-  "lambda_rec": 0.5,
-  "lambda_ctr": 0.5,
-  "lambda_vic": 0.1,
-  "val_loss": 0.24788183271884917,
-  "nmi": 0.4679629033414979,
-  "ari": 0.3819508426638335,
-  "f_score": 0.5407825816252462,
-  "acc": 0.6742857142857143,
-  "knn_acc": 0.75,
-  "ch_index": 42.750245230677
-}
+| | nmi | ari | f_score | acc | knn |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| concat(P,S) | 0.4199 | 0.2806 | 0.4611 | 0.5200 | 0.70 |
+| mean(S) | 0.3944 | 0.2644 | — | 0.5314 | 0.73 |
+
+Probes: subtype←S_other = 0.7121 | X←S R² = −0.0126 | X←P R² = −0.1082 | Δ(S−P) = 0.0956  
+Alignment: cosine = 0.0794 | CCA = 0.9796 | CKA = 0.7914
+
+---
+
+## OMIDIENT baseline (to fill)
+
+Same metrics as MOCSS AE. Evaluate an existing checkpoint:
+
+```bash
+sbatch run_omidient_eval.slurm
+# or: cd code/prod_gamma_dirvae && python evaluate.py --disease brca --config 0.0003_0.0005_4 --plot
 ```
+
+Results write to `results/models_brca_ProdGammaDirVae/<config>/metrics_shared_rep.json`.
+
+---
+
+## Method 2 + OMIDIENT private (joint train; results TBD)
+
+Package: `code/method2_omidient_private/`. Shared = Method-2 AE + contrastive; private = product-Dirichlet (K=4); recon = joint `D(concat(P,S))` + VICReg + KL. Sweep via `run_method2_omidient.slurm`. **Not comparable to Method 1/2 AE-private tables above** until reported here; compare to **OMIDIENT** and to Method 2 AE as ablations.
 
 ---
 
 ## Shared-quality metrics
 
-See **Compact comparison** above (diagnostic panel with mean(S) / concat(P) / concat(P,S), probes, CKA).
+See **Compact comparison** above (diagnostic panel with mean(S) / concat(P) / concat(P,S), probes, CKA). Per-method probe/alignment numbers for the eval_loss winners are also listed under each method section.

@@ -46,7 +46,9 @@ METHOD_DIRS = {
     'method1': 'models_{}_method1',
     'method1_vicreg': 'models_{}_method1_vicreg',
     'method2': 'models_{}_method2',
+    'method2_omidient': 'models_{}_method2_omidient',
     'mocss': 'models_{}_ae',
+    'omidient': 'models_{}_ProdGammaDirVae',
 }
 
 
@@ -90,12 +92,12 @@ def _subtype_probe(X, y):
 
 def infer_view_sizes(method, state):
     """Read input dims from checkpoint weights (no CSV / load_data needed)."""
-    if method == 'mocss':
+    if method in ('mocss', 'omidient'):
         d1 = int(state['shared1_l1.weight'].shape[1])
         d2 = int(state['shared2_l1.weight'].shape[1])
         d3 = int(state['shared3_l1.weight'].shape[1])
         return [d1, d2, d3]
-    # Method1 / VICReg / Method2 ModuleDict encoders
+    # Method1 / VICReg / Method2 / Method2+OMIDIENT ModuleDict encoders
     d1 = int(state['shared_enc.1.0.weight'].shape[1])
     d2 = int(state['shared_enc.2.0.weight'].shape[1])
     d3 = int(state['shared_enc.3.0.weight'].shape[1])
@@ -158,20 +160,68 @@ def load_latents(method, disease, config_dir):
         shared = {1: sh1.numpy(), 2: sh2.numpy(), 3: sh3.numpy()}
         return specific, shared, views, y, model, None
 
+    if method == 'omidient':
+        from multiomics.code.prod_gamma_dirvae.prod_gamma_dirvae_cancer import (
+            SharedAndSpecificEmbedding,
+        )
+
+        k_groups = int(os.path.basename(config_dir.rstrip('/')).split('_')[-1])
+        model = SharedAndSpecificEmbedding(
+            'ProdGamDirVae',
+            k_groups,
+            view_size=view_size,
+            n_units_1=[512, 256, 128, 8],
+            n_units_2=[512, 256, 128, 8],
+            n_units_3=[256, 128, 64, 8],
+            mlp_size=[32, 8],
+        )
+        model.load_state_dict(state)
+        model.eval()
+        with torch.no_grad():
+            s1, _a1, sh1, s2, _a2, sh2, s3, _a3, sh3, *_ = model(view1, view2, view3)
+        specific = {1: s1.numpy(), 2: s2.numpy(), 3: s3.numpy()}
+        shared = {1: sh1.numpy(), 2: sh2.numpy(), 3: sh3.numpy()}
+        return specific, shared, views, y, model, None
+
     if method == 'method1':
         from multiomics.code.method1_predictability.model import SharedAndSpecificEmbedding
+
+        model = SharedAndSpecificEmbedding(
+            view_size=view_size,
+            n_units_1=[512, 256, 128, 32],
+            n_units_2=[512, 256, 128, 32],
+            n_units_3=[256, 128, 64, 32],
+            mlp_size=[32, 8],
+        )
     elif method == 'method1_vicreg':
         from multiomics.code.method1_vicreg_ablation.model import SharedAndSpecificEmbedding
+
+        model = SharedAndSpecificEmbedding(
+            view_size=view_size,
+            n_units_1=[512, 256, 128, 32],
+            n_units_2=[512, 256, 128, 32],
+            n_units_3=[256, 128, 64, 32],
+            mlp_size=[32, 8],
+        )
+    elif method == 'method2_omidient':
+        from multiomics.code.method2_omidient_private.evaluate import (
+            build_model,
+            parse_k_from_config,
+        )
+
+        folder = os.path.basename(config_dir.rstrip('/'))
+        model = build_model(view_size, parse_k_from_config(folder))
     else:
         from multiomics.code.method2_joint_vicreg.model import SharedAndSpecificEmbedding
 
-    model = SharedAndSpecificEmbedding(
-        view_size=view_size,
-        n_units_1=[512, 256, 128, 32],
-        n_units_2=[512, 256, 128, 32],
-        n_units_3=[256, 128, 64, 32],
-        mlp_size=[32, 8],
-    )
+        model = SharedAndSpecificEmbedding(
+            view_size=view_size,
+            n_units_1=[512, 256, 128, 32],
+            n_units_2=[512, 256, 128, 32],
+            n_units_3=[256, 128, 64, 32],
+            mlp_size=[32, 8],
+        )
+
     model.load_state_dict(state)
     model.eval()
     with torch.no_grad():
@@ -343,6 +393,7 @@ def main(args):
         # Default diagnostic panel from recent sweeps
         jobs = [
             ('mocss', args.disease, '0.0004_0.0007'),
+            ('omidient', args.disease, '0.0003_0.0005_4'),
             ('method1', args.disease, '0.0004_0.0007_a0.7_b0.7_g0.7_l1.0'),
             ('method1', args.disease, '0.0004_0.0007_a1.0_b1.0_g0.7_l1.0'),
             ('method1_vicreg', args.disease, '0.0004_0.0007_a1.0_b0.5_v0.1_l1.0'),
@@ -388,7 +439,15 @@ if __name__ == '__main__':
         '--method',
         type=str,
         default='',
-        choices=['', 'method1', 'method1_vicreg', 'method2', 'mocss'],
+        choices=[
+            '',
+            'method1',
+            'method1_vicreg',
+            'method2',
+            'method2_omidient',
+            'mocss',
+            'omidient',
+        ],
     )
     parser.add_argument('--disease', type=str, default='brca')
     parser.add_argument('--config', type=str, default='', help='If empty, run default panel')
