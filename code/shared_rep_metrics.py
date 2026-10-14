@@ -2,7 +2,7 @@
 
 Primary integration metrics use concat(P1,P2,P3, mean(S)) with KMeans n_init=30.
 Additional diagnostics for shared quality:
-  1) clustering + kNN on mean(S) (and optional per-view S_m)
+  1) clustering + kNN on mean(S) and on concat(P1,P2,P3)
   2) cross-view probes (subtype from S_other; X_A from S_other vs P_other)
   3) alignment of shared codes (cosine / CCA / linear CKA)
 """
@@ -225,18 +225,15 @@ def evaluate_shared_and_integration(
     Shared-only metrics are prefixed with 's_'.
     """
     s_mean = (shared_by_view[1] + shared_by_view[2] + shared_by_view[3]) / 3.0
-    final_embedding = np.concatenate(
-        [
-            specific_by_view[1],
-            specific_by_view[2],
-            specific_by_view[3],
-            s_mean,
-        ],
+    p_cat = np.concatenate(
+        [specific_by_view[1], specific_by_view[2], specific_by_view[3]],
         axis=1,
     )
+    final_embedding = np.concatenate([p_cat, s_mean], axis=1)
 
     integration = clustering_and_knn(final_embedding, y, n_clusters)
     shared_only = clustering_and_knn(s_mean, y, n_clusters)
+    private_only = clustering_and_knn(p_cat, y, n_clusters)
     metrics = dict(integration)
     metrics.update({
         's_nmi': shared_only['nmi'],
@@ -246,6 +243,13 @@ def evaluate_shared_and_integration(
         's_v_measure': shared_only['v_measure'],
         's_ch_index': shared_only['ch_index'],
         's_knn_acc': shared_only['knn_acc'],
+        'p_nmi': private_only['nmi'],
+        'p_ari': private_only['ari'],
+        'p_f_score': private_only['f_score'],
+        'p_acc': private_only['acc'],
+        'p_v_measure': private_only['v_measure'],
+        'p_ch_index': private_only['ch_index'],
+        'p_knn_acc': private_only['knn_acc'],
     })
 
     # Per-view shared clustering (diagnostic)
@@ -276,6 +280,13 @@ LEADERBOARD_METRIC_KEYS = [
     's_v_measure',
     's_ch_index',
     's_knn_acc',
+    'p_nmi',
+    'p_ari',
+    'p_f_score',
+    'p_acc',
+    'p_v_measure',
+    'p_ch_index',
+    'p_knn_acc',
     's1_nmi',
     's1_knn_acc',
     's2_nmi',
@@ -324,7 +335,13 @@ def print_metrics_report(metrics):
             metrics['ch_index'],
         )
     )
-    print('kNN acc (concat): {:.2f}'.format(metrics['knn_acc']))
+    print('kNN acc (concat P+S): {:.2f}'.format(metrics['knn_acc']))
+    if 'p_nmi' in metrics:
+        print(
+            ' ' * 8
+            + '|==>  [concat P] nmi: %.4f,  ari: %.4f,  acc: %.4f,  knn: %.2f  <==|'
+            % (metrics['p_nmi'], metrics['p_ari'], metrics['p_acc'], metrics['p_knn_acc'])
+        )
     print(
         ' ' * 8
         + '|==>  [shared mean S] nmi: %.4f,  ari: %.4f,  acc: %.4f,  knn: %.2f  <==|'

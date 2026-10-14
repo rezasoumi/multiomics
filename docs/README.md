@@ -156,24 +156,34 @@ Alignment: cosine = 0.0794 | CCA = 0.9796 | CKA = 0.7914
 
 ---
 
-## OMIDIENT baseline (to fill)
+## Dirichlet-private models (OMIDIENT family)
 
-Same metrics as MOCSS AE. Evaluate an existing checkpoint:
+Same `shared_rep_metrics` suite as MOCSS AE / Method 1–2. These use **product-Dirichlet private** codes — not directly comparable to the AE-private tables above. Method 2 + OMIDIENT joint row will be filled after `run_method2_omidient.slurm` finishes.
 
-```bash
-sbatch run_omidient_eval.slurm
-# or: cd code/prod_gamma_dirvae && python evaluate.py --disease brca --config 0.0003_0.0005_4 --plot
-```
+| Method | Config | mean(S) NMI | concat(P) NMI | concat(P,S) NMI | ARI | Acc | kNN | subtype←S | Δ X R² | CKA |
+| ------ | ------ | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| OMIDIENT | `0.0003_0.0005_4` (K=4) | 0.5019 | — * | 0.5019 | 0.4224 | 0.6629 | 0.80 | 0.7500 | +1.14 | 0.691 |
+| Method 2 + OMIDIENT private | — | — | — | — | — | — | — | — | — | — |
 
-Results write to `results/models_brca_ProdGammaDirVae/<config>/metrics_shared_rep.json`.
+\* `concat(P)` was not in the first eval pass; re-run `run_omidient_eval.slurm` after syncing `shared_rep_metrics.py` (now reports `p_nmi`) to fill this cell.
+
+### OMIDIENT detail (`0.0003_0.0005_4`)
+
+| | nmi | ari | f_score | acc | knn |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| concat(P,S) | 0.5019 | 0.4224 | 0.5732 | 0.6629 | 0.80 |
+| concat(P) | — * | — | — | — | — |
+| mean(S) | 0.5019 | 0.4224 | 0.5732 | 0.6629 | 0.75 |
+
+**Note on equal concat(P,S) vs mean(S):** clustering NMI/ARI/acc/CH matching to many decimals is **not corruption**. It means KMeans finds the **same partition** on `concat(P,S)` as on `mean(S)` — i.e. private codes are not changing subtype clusters (often near-constant / weak `P` for that task). kNN can still differ slightly because distances live in a different ambient dimension. `concat(P)` NMI is the direct check; also see probe X←P R² ≪ 0 here (−0.87), which already suggests foreign `P` carries little usable linear signal.
+
+Probes: subtype←S_other = 0.7500 | X←S R² = 0.2689 | X←P R² = −0.8695 | Δ(S−P) = 1.1384  
+Alignment: cosine = −0.1559 | CCA = 0.9315 | CKA = 0.6907
+
+Source: `results/models_brca_ProdGammaDirVae/0.0003_0.0005_4/metrics_shared_rep.json`.
 
 ---
 
-## Method 2 + OMIDIENT private (joint train; results TBD)
-
-Package: `code/method2_omidient_private/`. Shared = Method-2 AE + contrastive; private = product-Dirichlet (K=4); recon = joint `D(concat(P,S))` + VICReg + KL. Sweep via `run_method2_omidient.slurm`. **Not comparable to Method 1/2 AE-private tables above** until reported here; compare to **OMIDIENT** and to Method 2 AE as ablations.
-
----
 
 ## Shared-quality metrics
 
