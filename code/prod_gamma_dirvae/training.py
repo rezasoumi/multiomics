@@ -1,25 +1,27 @@
 import torch
 from torch.autograd import Variable
 
+
+def _batch_to_views(batch, view1_data, view2_data, use_gpu):
+    """Split concatenated batch into 3 views as float32 on the right device."""
+    d1 = view1_data.shape[1]
+    d2 = view2_data.shape[1]
+    v1 = torch.as_tensor(batch[:, :d1], dtype=torch.float32)
+    v2 = torch.as_tensor(batch[:, d1:d1 + d2], dtype=torch.float32)
+    v3 = torch.as_tensor(batch[:, d1 + d2:], dtype=torch.float32)
+    if use_gpu:
+        v1, v2, v3 = v1.cuda(), v2.cuda(), v3.cuda()
+    return Variable(v1), Variable(v2), Variable(v3)
+
+
 def train(train_loader, view1_data, view2_data, model, loss_function, temperature, optimizer, epoch, USE_GPU, total_epochs):
     total_loss = 0.0
     total = 0.0
     for iteration_index, train_batch in enumerate(train_loader):
         train_data = train_batch
-        view1_train_data = train_data[:, :view1_data.shape[1]]
-        view1_train_data = torch.tensor(view1_train_data).clone().detach()
-        view2_train_data = train_data[:, view1_data.shape[1]:view1_data.shape[1] + view2_data.shape[1]]
-        view2_train_data = torch.tensor(view2_train_data).clone().detach()
-        view3_train_data = train_data[:, view1_data.shape[1] + view2_data.shape[1]:]
-        view3_train_data = torch.tensor(view3_train_data).clone().detach()
-
-        if USE_GPU:
-            view1_train_data, view2_train_data, view3_train_data = Variable(view1_train_data.float().cuda()), Variable(
-                view2_train_data.float().cuda()), Variable(view3_train_data.float().cuda())
-        else:
-            view1_train_data = Variable(view1_train_data).type(torch.FloatTensor)
-            view2_train_data = Variable(view2_train_data).type(torch.FloatTensor)
-            view3_train_data = Variable(view3_train_data).type(torch.FloatTensor)
+        view1_train_data, view2_train_data, view3_train_data = _batch_to_views(
+            train_data, view1_data, view2_data, USE_GPU
+        )
 
         view1_specific_em, view1_specific_alpha, view1_shared_em, view2_specific_em, \
             view2_specific_alpha, view2_shared_em, view3_specific_em, view3_specific_alpha, \
@@ -27,11 +29,9 @@ def train(train_loader, view1_data, view2_data, model, loss_function, temperatur
             view2_shared_rec, view3_specific_rec, view3_shared_rec, view1_shared_mlp, view2_shared_mlp, \
             view3_shared_mlp = model(view1_train_data, view2_train_data, view3_train_data)
 
-        prior_alpha = torch.Tensor(1, 8).float().fill_(.5)
+        prior_alpha = torch.full((1, 8), 0.5, dtype=torch.float32)
         if USE_GPU:
             prior_alpha = prior_alpha.cuda()
-        else:
-            prior_alpha = prior_alpha.cpu()
 
         params = (prior_alpha, view1_train_data, view2_train_data, view3_train_data, # For Blie version
                   view1_shared_em, view2_shared_em, view3_shared_em,
@@ -71,20 +71,9 @@ def validation(val_loader, view1_data, view2_data, model, temperature, loss_func
     total = 0.0
     for iteration_index, val_batch in enumerate(val_loader):
         val_data = val_batch
-        view1_val_data = val_data[:, :view1_data.shape[1]]
-        view1_val_data = torch.tensor(view1_val_data).clone().detach()
-        view2_val_data = val_data[:, view1_data.shape[1]:view1_data.shape[1] + view2_data.shape[1]]
-        view2_val_data = torch.tensor(view2_val_data).clone().detach()
-        view3_val_data = val_data[:, view1_data.shape[1] + view2_data.shape[1]:]
-        view3_val_data = torch.tensor(view3_val_data).clone().detach()
-
-        if USE_GPU:
-            view1_val_data, view2_val_data, view3_val_data = Variable(view1_val_data.float().cuda()), Variable(
-                view2_val_data.float().cuda()), Variable(view3_val_data.float().cuda())
-        else:
-            view1_val_data = Variable(view1_val_data).type(torch.FloatTensor)
-            view2_val_data = Variable(view2_val_data).type(torch.FloatTensor)
-            view3_val_data = Variable(view3_val_data).type(torch.FloatTensor)
+        view1_val_data, view2_val_data, view3_val_data = _batch_to_views(
+            val_data, view1_data, view2_data, USE_GPU
+        )
 
         view1_specific_em, view1_specific_alpha, view1_shared_em, view2_specific_em, \
             view2_specific_alpha, view2_shared_em, view3_specific_em, view3_specific_alpha, \
@@ -92,7 +81,7 @@ def validation(val_loader, view1_data, view2_data, model, temperature, loss_func
             view2_shared_rec, view3_specific_rec, view3_shared_rec, view1_shared_mlp, view2_shared_mlp, \
             view3_shared_mlp = model(view1_val_data, view2_val_data, view3_val_data)
 
-        prior_alpha = torch.Tensor(1, 8).float().fill_(.5)
+        prior_alpha = torch.full((1, 8), 0.5, dtype=torch.float32)
         if USE_GPU:
             prior_alpha = prior_alpha.cuda()
 
