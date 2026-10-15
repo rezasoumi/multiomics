@@ -4,7 +4,8 @@ Primary integration metrics use concat(P1,P2,P3, mean(S)) with KMeans n_init=30.
 Additional diagnostics for shared quality:
   1) clustering + kNN on mean(S) and on concat(P1,P2,P3)
   2) cross-view probes (subtype from S_other; X_A from S_other vs P_other)
-  3) alignment of shared codes (cosine / CCA / linear CKA)
+  3) own-view reconstructiveness: X_m ← S_m / P_m / concat(P_m,S_m) (Ridge R²)
+  4) alignment of shared codes (cosine / CCA / linear CKA)
 """
 
 from __future__ import annotations
@@ -208,6 +209,35 @@ def probe_XA_from_other(views_by_id, shared_by_view, specific_by_view):
     return out
 
 
+def probe_XA_from_own(views_by_id, shared_by_view, specific_by_view):
+    """
+    Own-view reconstructiveness (Ridge R²), averaged over modalities m=1..3:
+      X_m ← S_m
+      X_m ← P_m
+      X_m ← concat(P_m, S_m)
+    """
+    s_r2s, p_r2s, ps_r2s = [], [], []
+    out = {}
+    for m in (1, 2, 3):
+        Y = views_by_id[m]
+        r2_s = _ridge_r2(shared_by_view[m], Y)
+        r2_p = _ridge_r2(specific_by_view[m], Y)
+        r2_ps = _ridge_r2(
+            np.concatenate([specific_by_view[m], shared_by_view[m]], axis=1),
+            Y,
+        )
+        s_r2s.append(r2_s)
+        p_r2s.append(r2_p)
+        ps_r2s.append(r2_ps)
+        out['probe_Xm_from_S_own_r2_{}'.format(m)] = r2_s
+        out['probe_Xm_from_P_own_r2_{}'.format(m)] = r2_p
+        out['probe_Xm_from_PS_own_r2_{}'.format(m)] = r2_ps
+    out['probe_Xm_from_S_own_r2'] = float(np.mean(s_r2s))
+    out['probe_Xm_from_P_own_r2'] = float(np.mean(p_r2s))
+    out['probe_Xm_from_PS_own_r2'] = float(np.mean(ps_r2s))
+    return out
+
+
 def evaluate_shared_and_integration(
     specific_by_view,
     shared_by_view,
@@ -260,6 +290,7 @@ def evaluate_shared_and_integration(
 
     metrics.update(probe_subtype_from_S_other(shared_by_view, y))
     metrics.update(probe_XA_from_other(views_by_id, shared_by_view, specific_by_view))
+    metrics.update(probe_XA_from_own(views_by_id, shared_by_view, specific_by_view))
     metrics.update(alignment_metrics(shared_by_view))
     return metrics, final_embedding, s_mean
 
@@ -306,6 +337,18 @@ LEADERBOARD_METRIC_KEYS = [
     'probe_XA_from_P_other_r2_1',
     'probe_XA_from_P_other_r2_2',
     'probe_XA_from_P_other_r2_3',
+    'probe_Xm_from_S_own_r2',
+    'probe_Xm_from_P_own_r2',
+    'probe_Xm_from_PS_own_r2',
+    'probe_Xm_from_S_own_r2_1',
+    'probe_Xm_from_S_own_r2_2',
+    'probe_Xm_from_S_own_r2_3',
+    'probe_Xm_from_P_own_r2_1',
+    'probe_Xm_from_P_own_r2_2',
+    'probe_Xm_from_P_own_r2_3',
+    'probe_Xm_from_PS_own_r2_1',
+    'probe_Xm_from_PS_own_r2_2',
+    'probe_Xm_from_PS_own_r2_3',
     'align_cosine_mean',
     'align_cca_mean',
     'align_cka_mean',
@@ -356,6 +399,15 @@ def print_metrics_report(metrics):
             metrics['probe_XA_S_minus_P_r2'],
         )
     )
+    if 'probe_Xm_from_S_own_r2' in metrics:
+        print(
+            'Own-view recon (Ridge R², mean over m): '
+            'X←S={:.4f} | X←P={:.4f} | X←[P;S]={:.4f}'.format(
+                metrics['probe_Xm_from_S_own_r2'],
+                metrics['probe_Xm_from_P_own_r2'],
+                metrics['probe_Xm_from_PS_own_r2'],
+            )
+        )
     print(
         'Alignment (mean over pairs): cosine={:.4f}  cca={:.4f}  cka={:.4f}'.format(
             metrics['align_cosine_mean'],

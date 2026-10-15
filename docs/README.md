@@ -234,6 +234,33 @@ Alignment: cosine = −0.1638 | CCA = 0.9265 | CKA = 0.7231
 
 ---
 
+## Analysis
+
+Reading the BRCA numbers as a shared/private **decomposition** problem (not just “higher NMI”):
+
+**MOCSS — private steals shared.**  
+`concat(P) ≈ concat(P,S) ≈ 0.45` while `mean(S) ≈ 0.42`. Under dual solo reconstruction, the AE private branch is strong enough to absorb subtype/shared biology. That is leakage into \(P\), not a clean split.
+
+**VICReg + `b_m` — best AE-private compromise, still not a clear win over MOCSS.**  
+Best AE-private control of the split (gap ~0, strong CKA, usable concat). But it does **not** beat MOCSS on `concat(P,S)` NMI (0.437 vs 0.450) and only slightly beats it on `mean(S)` (0.447 vs 0.422). Better hygiene / less collapse than Method 1 without `b_m`; not a decisive clustering upgrade over MOCSS.
+
+**Method 1 + `b_m` and Δ X R² (−0.19) — subtype coding ≠ reconstruction coding.**  
+M1+`b_m` has `mean(S)` NMI (0.45) &gt; `concat(P)` NMI (0.33), so \(S\) carries more **subtype** structure than \(P\). Yet Δ X R² = −0.19 (X←S R² ≈ −0.07, X←P R² ≈ +0.11): **foreign \(P\) is linearly more informative for full \(X_A\) than foreign \(S\)**. That is not a contradiction. Clustering NMI scores coarse label geometry; Ridge R² scores linear recoverability of high-dim features. Method 1 can push subtype into \(S\) while `b_m` / incomplete `g` leave reconstructive content in \(P\). VICReg+`b_m` is nearer a wash (Δ ≈ −0.03). Treat subtype probes and \(X\)-recon probes as **different axes**.
+
+**Method 2 — not working as intended.**  
+It behaves like a **cleaner MOCSS**: joint \(D([P,S])\) + VICReg improve training and alignment, but `concat(P)` stays high (~0.41) and the gap stays near zero/negative. Why: VICReg only soft-penalizes linear \(P\)–\(S\) dependence, and joint recon still allows both codes to carry overlapping content as long as the concat decoder succeeds. There is no operational definition that forces cross-view content into \(S\) and residual into \(P\) (unlike Method 1’s `f`/`g`/`k`/`b`). So independence + joint recon do not really separate shared from private. (M2’s *positive* Δ X R² is mostly foreign \(P\) failing at cross-view \(X\), not foreign \(S\) succeeding.)
+
+**OMIDIENT (reported / no \(L_\mathrm{ortho}\)) — bug-side free lunch.**  
+Repo training omitted `L_ortho`, so \(P\) and \(S\) had **no direct coupling**. Result: `concat(P)≈0.05`, `mean(S)≈0.50`, `concat(P,S)=mean(S)` — looks like a huge shared win with “no interference.” That is largely **complete separation of the two training paths**, not a verified shared/private theory win. The paper/repo side effectively got a higher NMI without noticing it came from dropping \(P\!\leftrightarrow\!S\) communication. In that regime the so-called \(S\) is better thought of as a **contrastive multi-view code** (same-sample modalities pulled together, still able to reconstruct) than as a purified shared factor; it can still mix private detail because nothing prevents that except contrastive geometry.
+
+**OMIDIENT (with \(L_\mathrm{ortho}\)) — intended-style; free lunch disappears.**  
+Restoring elementwise ortho (λ-best) brings integration back to **~MOCSS-like** levels (`concat(P,S)≈0.45`, `mean(S)≈0.45`) while `concat(P)` stays ~0.05. Coupling \(P\) and \(S\) again removes the optimistic no-ortho gap; Dirichlet still keeps \(P\) subtype-weak, but does not deliver the 0.50 shared story once ortho is on.
+
+**Takeaway.**  
+The strongest-looking “shared” result in the table is the **uncoupled** Dirichlet run and should not be sold as true OMIDIENT. Among AE-private methods, VICReg+`b_m` is the most coherent split so far, but it still does not clearly beat MOCSS on joint clustering. Method 2 needs a stronger shared definition if the goal is real \(S\)/\(P\) separation rather than a milder MOCSS.
+
+---
+
 ## Shared-quality metrics
 
 See **Compact comparison** (AE private) and **Method 2 / OMIDIENT family** above. Per-method probe/alignment numbers for the eval_loss winners are also listed under each method section.
