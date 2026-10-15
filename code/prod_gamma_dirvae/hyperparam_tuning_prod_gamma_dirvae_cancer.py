@@ -13,7 +13,9 @@ Configs are ranked by unweighted eval_loss = L_ctr + L_recon + KL
 import torch.optim
 import numpy as np
 import argparse
+import csv
 import json
+import re
 from itertools import product
 from sklearn.model_selection import train_test_split
 from multiomics.code.prod_gamma_dirvae.training import train, validation, EarlyStopper
@@ -23,6 +25,8 @@ from multiomics.code.prod_gamma_dirvae.prod_gamma_dirvae_cancer import (
     SharedAndSpecificLoss,
     SharedAndSpecificEmbedding,
 )
+from multiomics.code.prod_gamma_dirvae.evaluate import evaluate_config
+from multiomics.code.shared_rep_metrics import LEADERBOARD_METRIC_KEYS
 import os
 import warnings
 
@@ -134,8 +138,50 @@ def build_lambda_grid(use_orthogonal, grid_mode):
     ]
 
 
+def _parse_lambdas_from_config(name):
+    """Parse c/r/k/o tokens from folder name; missing keys → defaults."""
+    out = {
+        'lambda_ctr': DEFAULT_LAMBDA_CTR,
+        'lambda_recon': DEFAULT_LAMBDA_RECON,
+        'lambda_kl': DEFAULT_LAMBDA_KL,
+        'lambda_ortho': DEFAULT_LAMBDA_ORTHO,
+    }
+    for key, token in (
+        ('lambda_ctr', 'c'),
+        ('lambda_recon', 'r'),
+        ('lambda_kl', 'k'),
+        ('lambda_ortho', 'o'),
+    ):
+        m = re.search(r'(?:^|_){}([0-9]*\.?[0-9]+)(?:_|$)'.format(token), name)
+        if m:
+            out[key] = float(m.group(1))
+    return out
+
+
+def _load_or_compute_metrics(path, name):
+    """Load metrics_shared_rep.json or evaluate the checkpoint once and cache."""
+    metrics_path = os.path.join(path, 'metrics_shared_rep.json')
+    if os.path.isfile(metrics_path):
+        with open(metrics_path) as f:
+            data = json.load(f)
+        return {k: data[k] for k in LEADERBOARD_METRIC_KEYS if k in data}
+
+    print('  evaluating metrics for {} ...'.format(name))
+    metrics = evaluate_config(disease, path, name, plot=False)
+    out = {
+        'method': 'omidient',
+        'disease': disease,
+        'config': name,
+        'K': K_GROUPS,
+        **metrics,
+    }
+    with open(metrics_path, 'w') as f:
+        json.dump(out, f, indent=2)
+    return {k: metrics[k] for k in LEADERBOARD_METRIC_KEYS if k in metrics}
+
+
 def summarize_runs(use_orthogonal=True):
-    """Rank finished λ-configs by saved unweighted eval_loss."""
+    """Rank finished λ-configs by eval_loss; attach shared_rep metrics like Method 2."""
     parent = results_parent()
     rows = []
     if not os.path.isdir(parent):
@@ -149,54 +195,112 @@ def summarize_runs(use_orthogonal=True):
             continue
         if (not use_orthogonal) and ('_ortho_' in name or name.endswith('_ortho')):
             continue
-        # Prefer unweighted eval_loss for cross-λ ranking; fall back to weighted val loss
         eval_path = os.path.join(path, 'eval_loss.npy')
         loss_path = os.path.join(path, 'loss.npy')
         model_path = os.path.join(path, 'model_{}'.format(disease))
         if not os.path.isfile(model_path):
             continue
         if os.path.isfile(eval_path):
-            score = float(np.load(eval_path))
-            score_name = 'eval_loss'
+            eval_loss = float(np.load(eval_path))
         elif os.path.isfile(loss_path):
-            score = float(np.load(loss_path))
-            score_name = 'val_loss'
+            eval_loss = float(np.load(loss_path))
         else:
             continue
-        rows.append({'config': name, 'score': score, 'score_name': score_name})
+        val_loss = float(np.load(loss_path)) if os.path.isfile(loss_path) else eval_loss
+        lambdas = _parse_lambdas_from_config(name)
+        metrics = _load_or_compute_metrics(path, name)
+        row = {
+            'config': name,
+            'eval_loss': eval_loss,
+            'val_loss': val_loss,
+            **lambdas,
+            **metrics,
+        }
+        rows.append(row)
+
     if not rows:
         print('No finished configs to summarize under', parent)
         return None
-    rows.sort(key=lambda r: r['score'])
+
+    rows.sort(key=lambda r: float(r['eval_loss']))
     tag = 'ortho' if use_orthogonal else 'default'
     board_path = os.path.join(parent, 'leaderboard_{}.csv'.format(tag))
     best_path = os.path.join(parent, 'best_config_{}.json'.format(tag))
-    with open(board_path, 'w') as f:
-        f.write('rank,config,{},score_name\n'.format('score'))
+
+    fieldnames = [
+        'rank',
+        'config',
+        'lambda_ctr',
+        'lambda_recon',
+        'lambda_kl',
+        'lambda_ortho',
+        'eval_loss',
+        'val_loss',
+    ] + list(LEADERBOARD_METRIC_KEYS)
+    with open(board_path, 'w', newline='') as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction='ignore')
+        writer.writeheader()
         for i, r in enumerate(rows, 1):
-            f.write('{},{},{},{}\n'.format(i, r['config'], r['score'], r['score_name']))
-    best = {
-        'config': rows[0]['config'],
-        'eval_loss': rows[0]['score'],
-        'score_name': rows[0]['score_name'],
+            writer.writerow({'rank': i, **r})
+
+    best_row = rows[0]
+    out = {
+        'rank_metric': 'eval_loss',
+        'rank_direction': 'min',
+        'eval_loss_definition': (
+            'L_ctr + L_recon + KL (unweighted; ranking; λ and L_ortho excluded)'
+        ),
+        'config': best_row['config'],
         'use_orthogonal': use_orthogonal,
+        'lambda_ctr': float(best_row['lambda_ctr']),
+        'lambda_recon': float(best_row['lambda_recon']),
+        'lambda_kl': float(best_row['lambda_kl']),
+        'lambda_ortho': float(best_row['lambda_ortho']),
         'fixed': {'lr': LR, 'weight_decay': WEIGHT_DECAY, 'K': K_GROUPS},
+        'eval_loss': float(best_row['eval_loss']),
+        'val_loss': float(best_row['val_loss']),
     }
+    for k in (
+        'nmi', 'ari', 'f_score', 'acc', 'knn_acc', 'ch_index',
+        's_nmi', 's_ari', 's_acc', 's_knn_acc',
+        'probe_subtype_from_S_other_acc',
+        'probe_XA_from_S_other_r2',
+        'probe_XA_from_P_other_r2',
+        'probe_XA_S_minus_P_r2',
+        'align_cosine_mean',
+        'align_cca_mean',
+        'align_cka_mean',
+    ):
+        if k in best_row and best_row[k] not in (None, ''):
+            out[k] = float(best_row[k])
+
     with open(best_path, 'w') as f:
-        json.dump(best, f, indent=2)
+        json.dump(out, f, indent=2)
+
     print('Wrote', board_path)
-    score_label = rows[0]['score_name']
     print(
-        '\n========== TOP 10 by {} (lower better; {} configs) =========='.format(
-            score_label, len(rows)
+        '\n========== TOP 10 by eval_loss (lower better; {} configs) =========='.format(
+            len(rows)
         )
     )
     for i, r in enumerate(rows[:10], 1):
-        print('{:2d}. {} | {}={:.6f}'.format(i, r['config'], r['score_name'], r['score']))
-    print('\nBEST: {}'.format(best['config']))
-    print(json.dumps(best, indent=2))
+        s_nmi = float(r['s_nmi']) if r.get('s_nmi') not in (None, '') else float('nan')
+        print(
+            '{:2d}. {} | nmi={:.4f} s_nmi={:.4f} ari={:.4f} acc={:.4f} knn={:.2f} eval={:.4f}'.format(
+                i,
+                r['config'],
+                float(r.get('nmi', float('nan'))),
+                s_nmi,
+                float(r.get('ari', float('nan'))),
+                float(r.get('acc', float('nan'))),
+                float(r.get('knn_acc', float('nan'))),
+                float(r['eval_loss']),
+            )
+        )
+    print('\nBEST: {}'.format(out['config']))
+    print(json.dumps(out, indent=2))
     print('Wrote', best_path)
-    return best
+    return out
 
 
 def work(p):
