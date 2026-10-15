@@ -185,7 +185,16 @@ def summarize_runs(use_orthogonal=True):
     with open(best_path, 'w') as f:
         json.dump(best, f, indent=2)
     print('Wrote', board_path)
-    print('Best:', best)
+    score_label = rows[0]['score_name']
+    print(
+        '\n========== TOP 10 by {} (lower better; {} configs) =========='.format(
+            score_label, len(rows)
+        )
+    )
+    for i, r in enumerate(rows[:10], 1):
+        print('{:2d}. {} | {}={:.6f}'.format(i, r['config'], r['score_name'], r['score']))
+    print('\nBEST: {}'.format(best['config']))
+    print(json.dumps(best, indent=2))
     print('Wrote', best_path)
     return best
 
