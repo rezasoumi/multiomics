@@ -2,9 +2,9 @@
 
 Training and evaluation results for the methods described in [`shared-representation-method.md`](./shared-representation-method.md). Metrics are reported on the BRCA multi-omics setting used in this repository.
 
-**Private branch (important):** Method 1, Method 1 VICReg ablation, and Method 2 (AE private) use a **MOCSS-style plain AE** for `P_m`. Fair AE-private comparisons are vs **MOCSS (AE)**. **OMIDIENT** (Dirichlet private + MOCSS shared) and **Method 2 + OMIDIENT private** use product-Dirichlet private codes — see the separate Dirichlet / hybrid table below.
+**Private branch (important):** Method 1, Method 1 VICReg ablation, and Method 2 (AE private) use a **MOCSS-style plain AE** for `P_m`. Fair AE-private comparisons are vs **MOCSS (AE)**. **OMIDIENT** uses product-Dirichlet private + MOCSS-style shared. In this repo the published checkpoint `0.0003_0.0005_4` was trained **without** `L_ortho` in `loss_total` (implementation gap); that row is labeled **OMIDIENT (reported / no \(L_\mathrm{ortho}\))**. **OMIDIENT (with \(L_\mathrm{ortho}\))** is the intended objective (λ-sweep below). **Method 2 + OMIDIENT private** mixes Method-2 shared with Dirichlet private — see the separate family table.
 
-**Ranking:** configs are ranked by **core validation loss** (MOCSS-style; label-free). Method 1 / Method 1 VICReg → `L_std + L_shared + L_priv + L_ctr` (with `b_m`; `L_vic` excluded for VICReg). Method 2 / Method 2+OMIDIENT → `L_recon + L_ctr` (`L_vic` / `L_kl` excluded). OMIDIENT+ortho λ-sweep → `L_ctr + L_recon + KL` (λ and `L_ortho` excluded). Clustering/kNN/shared probes are reported on the selected config (KMeans `n_init=30`).
+**Ranking:** configs are ranked by **core validation loss** (MOCSS-style; label-free). Method 1 / Method 1 VICReg → `L_std + L_shared + L_priv + L_ctr` (with `b_m`; `L_vic` excluded for VICReg). Method 2 / Method 2+OMIDIENT → `L_recon + L_ctr` (`L_vic` / `L_kl` excluded). OMIDIENT with \(L_\mathrm{ortho}\) λ-sweep → `L_ctr + L_recon + KL` (λ and `L_ortho` excluded from ranking). Clustering/kNN/shared probes are reported on the selected config (KMeans `n_init=30`).
 
 **`b_m(P_m) → X_m` (private sufficiency):** Method 1 and Method 1 VICReg numbers below are **with** `b_m` and `λ_priv` (`p` token in config names).
 
@@ -154,14 +154,14 @@ Alignment: cosine = 0.0794 | CCA = 0.9796 | CKA = 0.7914
 
 ## Method 2 / OMIDIENT family (separate comparison)
 
-Dirichlet private (`P`) vs Method-2 AE private. OMIDIENT / OMIDIENT+ortho keep MOCSS-style shared; Method 2 + OMIDIENT uses Method-2 joint decode + VICReg with product-Dirichlet private. Not directly comparable to the AE-private compact panel above on private geometry.
+Dirichlet private (`P`) vs Method-2 AE private. Both OMIDIENT rows keep MOCSS-style shared; Method 2 + OMIDIENT uses Method-2 joint decode + VICReg with product-Dirichlet private. Not directly comparable to the AE-private compact panel above on private geometry.
 
 | Method | Best config | mean(S) NMI | concat(P) NMI | concat(P,S) NMI | ARI | Acc | kNN | subtype←S | Δ X R² | CKA | eval_loss |
 | ------ | ----------- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | Method 2 (AE private) | `0.0004_0.0007_r1.5_c0.5_v0.1` | 0.3944 | 0.408 | 0.4199 | 0.2806 | 0.5200 | 0.70 | 0.7121 | +0.10 | 0.791 | 0.4693 |
 | Method 2 + OMIDIENT private | `0.0004_0.0007_r1.5_c0.5_v0.1_k4` | 0.3925 | 0.0432 | 0.3902 | 0.2694 | 0.5543 | 0.73 | 0.6970 | +0.78 | 0.702 | 0.4827 |
-| OMIDIENT | `0.0003_0.0005_4` (K=4) | 0.5019 | 0.0480 | 0.5019 | 0.4224 | 0.6629 | 0.80 | 0.7500 | +1.14 | 0.691 | — |
-| OMIDIENT + ortho (λ-best) | `0.0003_0.0005_4_ortho_c2_r1.5_k1_o0.5` | 0.4537 | 0.0480 | 0.4470 | 0.3498 | 0.5943 | 0.73 | 0.7348 | +1.13 | 0.723 | 0.9568 |
+| OMIDIENT (reported / no \(L_\mathrm{ortho}\)) | `0.0003_0.0005_4` (K=4) | 0.5019 | 0.0480 | 0.5019 | 0.4224 | 0.6629 | 0.80 | 0.7500 | +1.14 | 0.691 | — |
+| OMIDIENT (with \(L_\mathrm{ortho}\), λ-best) | `0.0003_0.0005_4_ortho_c2_r1.5_k1_o0.5` | 0.4537 | 0.0480 | 0.4470 | 0.3498 | 0.5943 | 0.73 | 0.7348 | +1.13 | 0.723 | 0.9568 |
 
 ### Method 2 + OMIDIENT private — top 10 / detail
 
@@ -191,9 +191,9 @@ Package: `code/method2_omidient_private/`. Rank: `eval_loss = L_recon + L_ctr` (
 Probes: subtype←S_other = 0.6970 | X←S R² = −0.0881 | X←P R² = −0.8695 | Δ(S−P) = 0.7814  
 Alignment: cosine = −0.0045 | CCA = 0.9745 | CKA = 0.7015
 
-### OMIDIENT (no ortho)
+### OMIDIENT (reported / no \(L_\mathrm{ortho}\))
 
-Config: `0.0003_0.0005_4` (repo BRCA default). Source: `results/models_brca_ProdGammaDirVae/0.0003_0.0005_4/metrics_shared_rep.json`.
+Repo BRCA checkpoint as released in this codebase (`0.0003_0.0005_4`). Trained with `L = L_ctr + 0.7 L_recon + KL` only — `orthogonal_loss` was **not** in `loss_total` (gap vs intended OMIDIENT / MOCSS-style coupling). Source: `results/models_brca_ProdGammaDirVae/0.0003_0.0005_4/metrics_shared_rep.json`.
 
 | | nmi | ari | f_score | acc | knn |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -204,11 +204,17 @@ Config: `0.0003_0.0005_4` (repo BRCA default). Source: `results/models_brca_Prod
 Probes: subtype←S_other = 0.7500 | X←S R² = 0.2689 | X←P R² = −0.8695 | Δ(S−P) = 1.1384  
 Alignment: cosine = −0.1559 | CCA = 0.9315 | CKA = 0.6907
 
-### OMIDIENT + ortho (λ-sweep best)
+### OMIDIENT (with \(L_\mathrm{ortho}\), λ-sweep best)
 
-Fixed `lr=0.0003`, `wd=0.0005`, `K=4`; sweep `λ_ctr × λ_recon × λ_kl × λ_ortho`. Rank: unweighted `L_ctr + L_recon + KL`.
+Intended OMIDIENT-style objective: `L = λ_ctr L_ctr + λ_recon L_recon + λ_kl KL + λ_ortho L_ortho`. Fixed `lr=0.0003`, `wd=0.0005`, `K=4`; sweep λ. Rank: unweighted `L_ctr + L_recon + KL`.
 
 **Best (eval_loss):** `0.0003_0.0005_4_ortho_c2_r1.5_k1_o0.5` (λ_ctr=2.0, λ_recon=1.5, λ_kl=1.0, λ_ortho=0.5)
+
+| | nmi | ari | f_score | acc | knn |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| concat(P,S) | 0.4470 | 0.3498 | 0.5152 | 0.5943 | 0.73 |
+| concat(P) | 0.0480 | 0.0166 | — | 0.2914 | 0.50 |
+| mean(S) | 0.4537 | 0.3431 | — | 0.5886 | 0.70 |
 
 | Rank | Config | NMI | s_nmi | ARI | Acc | kNN | eval_loss |
 | ---: | ------ | ---: | ---: | ---: | ---: | ---: | ---: |
