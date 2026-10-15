@@ -45,10 +45,20 @@ DEFAULT_LAMBDA_KL = 1.0
 DEFAULT_LAMBDA_ORTHO = 1.0
 
 # Loss-weight grids (Method-2-style spans; always include the original defaults)
-LAMBDA_CTR_GRID = [0.5, 0.7, 1.0, 1.5, 2.0]
-LAMBDA_RECON_GRID = [0.3, 0.5, 0.7, 1.0, 1.5]
-LAMBDA_KL_GRID = [0.5, 0.7, 1.0, 1.5, 2.0]
-LAMBDA_ORTHO_GRID = [0.5, 0.7, 1.0, 1.5, 2.0]
+LAMBDA_CTR_GRID_FULL = [0.5, 0.7, 1.0, 1.5, 2.0]
+LAMBDA_RECON_GRID_FULL = [0.3, 0.5, 0.7, 1.0, 1.5]
+LAMBDA_KL_GRID_FULL = [0.5, 0.7, 1.0, 1.5, 2.0]
+LAMBDA_ORTHO_GRID_FULL = [0.5, 0.7, 1.0, 1.5, 2.0]
+# Coarse: keep low / default-ish / high → 3^4 = 81 (ortho) instead of 625
+LAMBDA_CTR_GRID_COARSE = [0.5, 1.0, 2.0]
+LAMBDA_RECON_GRID_COARSE = [0.3, 0.7, 1.5]
+LAMBDA_KL_GRID_COARSE = [0.5, 1.0, 2.0]
+LAMBDA_ORTHO_GRID_COARSE = [0.5, 1.0, 2.0]
+# Back-compat aliases (full)
+LAMBDA_CTR_GRID = LAMBDA_CTR_GRID_FULL
+LAMBDA_RECON_GRID = LAMBDA_RECON_GRID_FULL
+LAMBDA_KL_GRID = LAMBDA_KL_GRID_FULL
+LAMBDA_ORTHO_GRID = LAMBDA_ORTHO_GRID_FULL
 
 
 def _fmt(x):
@@ -75,24 +85,52 @@ def results_parent():
     return '../../results/models_{}_ProdGammaDirVae'.format(disease)
 
 
-def build_lambda_grid(use_orthogonal, grid_search):
-    if not grid_search:
+def _grids_for_mode(grid_mode):
+    """Return (ctr, recon, kl, ortho) lists for the requested search mode."""
+    if grid_mode in (False, None, 'off', 'single'):
+        return None
+    if grid_mode in (True, 'full'):
+        return (
+            LAMBDA_CTR_GRID_FULL,
+            LAMBDA_RECON_GRID_FULL,
+            LAMBDA_KL_GRID_FULL,
+            LAMBDA_ORTHO_GRID_FULL,
+        )
+    if grid_mode == 'coarse':
+        return (
+            LAMBDA_CTR_GRID_COARSE,
+            LAMBDA_RECON_GRID_COARSE,
+            LAMBDA_KL_GRID_COARSE,
+            LAMBDA_ORTHO_GRID_COARSE,
+        )
+    if grid_mode == 'ortho-only':
+        # Fix published defaults; only sweep λ_ortho (fastest meaningful ortho screen)
+        return (
+            [DEFAULT_LAMBDA_CTR],
+            [DEFAULT_LAMBDA_RECON],
+            [DEFAULT_LAMBDA_KL],
+            LAMBDA_ORTHO_GRID_FULL,
+        )
+    raise ValueError(
+        "Unknown grid mode {!r}; use off|single|coarse|full|ortho-only".format(grid_mode)
+    )
+
+
+def build_lambda_grid(use_orthogonal, grid_mode):
+    grids = _grids_for_mode(grid_mode)
+    if grids is None:
         return [(
             DEFAULT_LAMBDA_CTR,
             DEFAULT_LAMBDA_RECON,
             DEFAULT_LAMBDA_KL,
             DEFAULT_LAMBDA_ORTHO,
         )]
+    ctr_g, recon_g, kl_g, ortho_g = grids
     if use_orthogonal:
-        return list(product(
-            LAMBDA_CTR_GRID,
-            LAMBDA_RECON_GRID,
-            LAMBDA_KL_GRID,
-            LAMBDA_ORTHO_GRID,
-        ))
+        return list(product(ctr_g, recon_g, kl_g, ortho_g))
     return [
         (c, r, k, DEFAULT_LAMBDA_ORTHO)
-        for c, r, k in product(LAMBDA_CTR_GRID, LAMBDA_RECON_GRID, LAMBDA_KL_GRID)
+        for c, r, k in product(ctr_g, recon_g, kl_g)
     ]
 
 
@@ -161,7 +199,8 @@ def work(p):
     loss_best = np.inf
     eval_best = np.inf
     model_path = ''
-    early_stopper = EarlyStopper(patience=30, min_delta=10)
+    # Plateau stop: no improvement of min_delta for `patience` epochs (old min_delta=10 never fired)
+    early_stopper = EarlyStopper(patience=15, min_delta=0.002)
     temperature = 0.4
     method = 'prod_gamma_dirvae'
 
@@ -263,20 +302,28 @@ def main(args):
     epochs = args.epochs
     use_orthogonal = bool(args.use_orthogonal)
     resume = bool(args.resume)
-    grid = build_lambda_grid(use_orthogonal, bool(args.grid_search))
+    grid_mode = args.grid_search
+    # argparse store_true legacy: True → full
+    if grid_mode is True:
+        grid_mode = 'full'
+    elif grid_mode is False or grid_mode is None:
+        grid_mode = 'off'
+    grid = build_lambda_grid(use_orthogonal, grid_mode)
+    grids = _grids_for_mode(grid_mode)
 
     print(
-        'Fixed: lr={} wd={} K={} | use_orthogonal={} | {} λ-config(s)'.format(
-            LR, WEIGHT_DECAY, K_GROUPS, use_orthogonal, len(grid)
+        'Fixed: lr={} wd={} K={} | use_orthogonal={} | grid={} | {} λ-config(s)'.format(
+            LR, WEIGHT_DECAY, K_GROUPS, use_orthogonal, grid_mode, len(grid)
         )
     )
-    if args.grid_search:
+    if grids is not None:
+        ctr_g, recon_g, kl_g, ortho_g = grids
         print(
             'λ grids: ctr={} recon={} kl={}{}'.format(
-                LAMBDA_CTR_GRID,
-                LAMBDA_RECON_GRID,
-                LAMBDA_KL_GRID,
-                ' ortho={}'.format(LAMBDA_ORTHO_GRID) if use_orthogonal else '',
+                ctr_g,
+                recon_g,
+                kl_g,
+                ' ortho={}'.format(ortho_g) if use_orthogonal else '',
             )
         )
 
@@ -301,8 +348,17 @@ if __name__ == '__main__':
     )
     parser.add_argument(
         '--grid-search',
-        action='store_true',
-        help='Sweep λ_ctr × λ_recon × λ_kl [× λ_ortho]; lr/wd/K stay fixed',
+        nargs='?',
+        const='full',
+        default='off',
+        choices=['off', 'single', 'coarse', 'full', 'ortho-only'],
+        help=(
+            'λ sweep mode (lr/wd/K fixed). '
+            'off/single=1 default; '
+            'ortho-only=5 (fix c/r/k, sweep o); '
+            'coarse=3^4=81; full=5^4=625. '
+            'Bare --grid-search means full.'
+        ),
     )
     parser.add_argument(
         '--resume',

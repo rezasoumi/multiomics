@@ -25,9 +25,9 @@ cd ${REPO}/code/prod_gamma_dirvae
 mkdir -p ${REPO}/results ${REPO}/logs
 
 # Fixed optimizer / K at pre-ortho BRCA best: lr=0.0003, wd=0.0005, K=4
-# Grid loss weights WITH L_ortho:
+# Coarse λ grid WITH L_ortho (fast screen; use --grid-search full for 625):
 #   L = λ_ctr L_ctr + λ_recon L_recon + λ_kl KL + λ_ortho L_ortho
-#   5×5×5×5 = 625 configs  (c/r/k/o grids)
+#   coarse 3×3×3×3 = 81  (~1 day) | ortho-only = 5 (~1 h) | full = 625 (~5 days)
 # Saves under 0.0003_0.0005_4_ortho_c*_r*_k*_o* (does NOT overwrite no-ortho)
 # Rank by unweighted eval_loss = L_ctr + L_recon + KL (λ and L_ortho excluded)
 PARENT=${REPO}/results/models_brca_ProdGammaDirVae
@@ -35,14 +35,14 @@ PARENT=${REPO}/results/models_brca_ProdGammaDirVae
 echo "=== Host: $(hostname)  CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-unset} ==="
 python -u -c "import torch; import multiomics.code.prod_gamma_dirvae.prod_gamma_dirvae_cancer as m; print('torch', torch.__version__, 'cuda', torch.cuda.is_available(), 'omidient_ok', m.__file__)"
 
-echo "=== Train OMIDIENT + L_ortho: λ grid (lr/wd/K fixed) ==="
+echo "=== Train OMIDIENT + L_ortho: coarse λ grid (lr/wd/K fixed) ==="
 echo "=== --resume safe to requeue ==="
 
 python -u hyperparam_tuning_prod_gamma_dirvae_cancer.py \
   --epochs 100 \
   --batch-size 32 \
   --use-orthogonal \
-  --grid-search \
+  --grid-search coarse \
   --resume
 
 echo "=== Summarize best by eval_loss among *_ortho_* ==="

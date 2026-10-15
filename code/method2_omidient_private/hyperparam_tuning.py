@@ -48,9 +48,17 @@ LR = {'brca': 0.0004, 'kirc': 0.0002, 'coad': 0.0002, 'lihc': 0.0002}[disease]
 WEIGHT_DECAY = {'brca': 0.0007, 'kirc': 0.0007, 'coad': 0.0007, 'lihc': 0.0007}[disease]
 
 # Same Method-2 weight grid; K / λ_kl fixed to OMIDIENT BRCA defaults
-LAMBDA_REC_GRID = [0.3, 0.5, 0.7, 1.0, 1.5]
-LAMBDA_CTR_GRID = [0.5, 0.7, 1.0, 1.5, 2.0]
-LAMBDA_VIC_GRID = [0.1, 0.5, 1.0, 2.0, 5.0]
+LAMBDA_REC_GRID_FULL = [0.3, 0.5, 0.7, 1.0, 1.5]
+LAMBDA_CTR_GRID_FULL = [0.5, 0.7, 1.0, 1.5, 2.0]
+LAMBDA_VIC_GRID_FULL = [0.1, 0.5, 1.0, 2.0, 5.0]
+# Coarse: low / mid / high → 3×3×3 = 27 instead of 125
+LAMBDA_REC_GRID_COARSE = [0.3, 0.7, 1.5]
+LAMBDA_CTR_GRID_COARSE = [0.5, 1.0, 2.0]
+LAMBDA_VIC_GRID_COARSE = [0.1, 1.0, 5.0]
+# Back-compat aliases (full)
+LAMBDA_REC_GRID = LAMBDA_REC_GRID_FULL
+LAMBDA_CTR_GRID = LAMBDA_CTR_GRID_FULL
+LAMBDA_VIC_GRID = LAMBDA_VIC_GRID_FULL
 
 MINIMIZE_METRICS = frozenset({'eval_loss', 'val_loss'})
 DEFAULT_RANK_METRIC = 'eval_loss'
@@ -453,16 +461,26 @@ def compute_eval_loss_from_checkpoint(path, batch=BATCH_SIZE, hparams=None):
     return eval_loss
 
 
-def build_grid():
-    return list(product(LAMBDA_REC_GRID, LAMBDA_CTR_GRID, LAMBDA_VIC_GRID))
+def grids_for_mode(grid_mode):
+    if grid_mode in (None, 'full'):
+        return LAMBDA_REC_GRID_FULL, LAMBDA_CTR_GRID_FULL, LAMBDA_VIC_GRID_FULL
+    if grid_mode == 'coarse':
+        return LAMBDA_REC_GRID_COARSE, LAMBDA_CTR_GRID_COARSE, LAMBDA_VIC_GRID_COARSE
+    raise ValueError("Unknown --grid-search {!r}; use coarse|full".format(grid_mode))
+
+
+def build_grid(grid_mode='full'):
+    rec_g, ctr_g, vic_g = grids_for_mode(grid_mode)
+    return list(product(rec_g, ctr_g, vic_g)), rec_g, ctr_g, vic_g
 
 
 def run_sweep(args):
     batch, epochs = args.batch_size, args.epochs
     lr, wd = LR, WEIGHT_DECAY
     k_groups = args.k_groups
+    grid_mode = args.grid_search
 
-    grid = build_grid()
+    grid, rec_g, ctr_g, vic_g = build_grid(grid_mode)
     total = len(grid)
     print(
         'USE_GPU={} | device={}'.format(
@@ -471,12 +489,13 @@ def run_sweep(args):
         )
     )
     print(
-        'Sweep size: {} | lambda_rec={} lambda_ctr={} lambda_vic={} | '
+        'Sweep size: {} | grid={} | lambda_rec={} lambda_ctr={} lambda_vic={} | '
         'K={} lambda_kl={} | lr={} wd={}'.format(
             total,
-            LAMBDA_REC_GRID,
-            LAMBDA_CTR_GRID,
-            LAMBDA_VIC_GRID,
+            grid_mode,
+            rec_g,
+            ctr_g,
+            vic_g,
             k_groups,
             LAMBDA_KL,
             lr,
@@ -583,6 +602,12 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', type=int, default=EPOCHS)
     parser.add_argument('--batch-size', type=int, default=BATCH_SIZE)
     parser.add_argument('--k-groups', type=int, default=K_GROUPS)
+    parser.add_argument(
+        '--grid-search',
+        choices=['coarse', 'full'],
+        default='full',
+        help='λ grid size: coarse=3×3×3=27, full=5×5×5=125 (default: full)',
+    )
     parser.add_argument('--resume', action='store_true')
     parser.add_argument('--retrain', action='store_true')
     parser.add_argument('--summarize-only', action='store_true')

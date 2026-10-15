@@ -30,11 +30,17 @@ python -u -c "import torch; import multiomics.code.method2_omidient_private.mode
 echo "=== Method 2 + OMIDIENT private: joint train ==="
 echo "=== Shared: Method-2 AE + contrastive; Private: product-Dirichlet (K=4) ==="
 echo "=== Loss: λ_rec L_recon + λ_ctr L_ctr + λ_vic L_vic + λ_kl L_kl (λ_kl=1.0 fixed) ==="
-echo "=== Grid: same Method-2 5x5x5 weights; config token _k4 ==="
+echo "=== Grid: coarse 3x3x3=27 (use --grid-search full for 125); config token _k4 ==="
 echo "=== Rank: eval_loss = L_recon + L_ctr (L_vic/L_kl excluded) ==="
 echo "=== Note: Dirichlet sampling is slower than AE private; --resume safe to requeue ==="
 
-python -u hyperparam_tuning.py --epochs 100 --batch-size 32 --k-groups 4 --resume --rank-metric eval_loss
+python -u hyperparam_tuning.py \
+  --epochs 100 \
+  --batch-size 32 \
+  --k-groups 4 \
+  --grid-search coarse \
+  --resume \
+  --rank-metric eval_loss
 
 echo "=== Final summarize (best by fixed eval_loss) ==="
 python -u hyperparam_tuning.py --summarize-only --rank-metric eval_loss
