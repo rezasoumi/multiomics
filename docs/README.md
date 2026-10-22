@@ -12,7 +12,8 @@ Training and evaluation results for the methods described in [`shared-representa
 
 1. Clustering + kNN on `mean(S)` (`s_nmi`, `s_knn_acc`, …)
 2. Cross-view probes: subtype ← `S_other`; Ridge R² for `X_A ← (S_B,S_C)` vs `X_A ← (P_B,P_C)`
-3. Alignment of shared codes: mean pairwise cosine / CCA / linear CKA
+3. Own-view reconstructiveness: Ridge R² for `X_m ← S_m`, `X_m ← P_m`, `X_m ← [P_m;S_m]` (mean over modalities)
+4. Alignment of shared codes: mean pairwise cosine / CCA / linear CKA
 
 Config name prefixes like `0.0004_0.0007` are learning-rate / weight-decay settings; the remaining tokens encode loss weights (`a`/`b`/`g` = α/β/γ, `p` = λ_priv, `l` = λ_ctr, `v` = λ_vic, `r`/`c` = λ_rec / λ_ctr for Method 2; OMIDIENT ortho: `c`/`r`/`k`/`o` = λ_ctr / λ_recon / λ_kl / λ_ortho).
 
@@ -20,15 +21,15 @@ Config name prefixes like `0.0004_0.0007` are learning-rate / weight-decay setti
 
 ## Compact comparison (AE private)
 
-Shared / private diagnostic panel (BRCA). `gap S−PS` = mean(S) NMI − concat(P,S) NMI (large positive ⇒ private hurts integration). `Δ X R²` = R²(X←S_other) − R²(X←P_other). Probe numbers for Method 1 / VICReg are from the final re-eval of the eval_loss winner.
+Shared / private diagnostic panel (BRCA). `gap S−PS` = mean(S) NMI − concat(P,S) NMI (large positive ⇒ private hurts integration). `Δ X R²` = R²(X←S_other) − R²(X←P_other). Own-view columns: Ridge R² for \(X_m \leftarrow S_m\) / \(P_m\) / \([P_m;S_m]\) (mean over \(m\)). Probe numbers for Method 1 / VICReg are from the final re-eval of the eval_loss winner.
 
-| Config | mean(S) NMI | concat(P) NMI | concat(P,S) NMI | gap S−PS | Δ X R² | CKA |
-| ------ | ---: | ---: | ---: | ---: | ---: | ---: |
-| MOCSS | 0.422 | 0.448 | 0.450 | −0.03 | +0.06 | 0.75 |
-| M1 + `b_m` loss-best (a1.5 b0.7 g0.7 p0.5) | 0.453 | 0.330 | 0.398 | +0.06 | −0.19 | 0.72 |
-| VICReg + `b_m` loss-best (a0.7 b0.5 v0.1 p1.0) | 0.447 | 0.248 | 0.437 | +0.01 | −0.03 | 0.80 |
-| M2 loss-best | 0.394 | 0.408 | 0.420 | −0.03 | +0.10 | 0.79 |
-| M2 high-NMI (r0.5 c0.5 v0.1) | 0.412 | 0.382 | 0.456 | −0.04 | +0.09 | 0.82 |
+| Config | mean(S) NMI | concat(P) NMI | concat(P,S) NMI | gap S−PS | Δ X R² | X←S own | X←P own | X←[P;S] own | CKA |
+| ------ | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| MOCSS | 0.422 | 0.448 | 0.450 | −0.03 | +0.06 | 0.420 | 0.488 | 0.372 | 0.75 |
+| M1 + `b_m` loss-best (a1.5 b0.7 g0.7 p0.5) | 0.453 | 0.330 | 0.398 | +0.06 | −0.19 | 0.266 | 0.429 | 0.341 | 0.72 |
+| VICReg + `b_m` loss-best (a0.7 b0.5 v0.1 p1.0) | 0.447 | 0.248 | 0.437 | +0.01 | −0.03 | 0.358 | 0.420 | 0.354 | 0.80 |
+| M2 loss-best | 0.394 | 0.408 | 0.420 | −0.03 | +0.10 | 0.378 | 0.435 | 0.376 | 0.79 |
+| M2 high-NMI (r0.5 c0.5 v0.1) | 0.412 | 0.382 | 0.456 | −0.04 | +0.09 | — | — | — | 0.82 |
 
 ---
 
@@ -53,6 +54,7 @@ Plain multi-omics contrastive shared–specific autoencoder (same private AE fam
 | mean(S) | 0.4219 | 0.3362 | — | 0.5943 | 0.73 |
 
 Probes: subtype←S_other = 0.7424 | X←S R² = −0.0742 | X←P R² = −0.1314 | Δ(S−P) = 0.0573  
+Own-view recon: X←S = 0.4201 | X←P = 0.4877 | X←[P;S] = 0.3721  
 Alignment: cosine = −0.0350 | CCA = 0.9730 | CKA = 0.7531
 
 ---
@@ -85,6 +87,7 @@ Package: `code/method1_predictability/` (full predictability with own-network te
 | mean(S) | 0.4532 | 0.3672 | — | 0.6286 | 0.75 |
 
 Probes: subtype←S_other = 0.7879 | X←S R² = −0.0743 | X←P R² = 0.1117 | Δ(S−P) = −0.1860  
+Own-view recon: X←S = 0.2660 | X←P = 0.4293 | X←[P;S] = 0.3410  
 Alignment: cosine = −0.0246 | CCA = 0.9726 | CKA = 0.7222
 
 ---
@@ -117,6 +120,7 @@ Package: `code/method1_vicreg_ablation/`. Results: `results/models_brca_method1_
 | mean(S) | 0.4468 | 0.3602 | — | 0.6400 | 0.75 |
 
 Probes: subtype←S_other = 0.7045 | X←S R² = −0.0089 | X←P R² = 0.0214 | Δ(S−P) = −0.0303  
+Own-view recon: X←S = 0.3577 | X←P = 0.4197 | X←[P;S] = 0.3535  
 Alignment: cosine = −0.0392 | CCA = 0.9833 | CKA = 0.7964
 
 ---
@@ -148,20 +152,21 @@ Package: `code/method2_joint_vicreg/`. Private encoders: plain AE (MOCSS-style).
 | mean(S) | 0.3944 | 0.2644 | — | 0.5314 | 0.73 |
 
 Probes: subtype←S_other = 0.7121 | X←S R² = −0.0126 | X←P R² = −0.1082 | Δ(S−P) = 0.0956  
+Own-view recon: X←S = 0.3779 | X←P = 0.4353 | X←[P;S] = 0.3762  
 Alignment: cosine = 0.0794 | CCA = 0.9796 | CKA = 0.7914
 
 ---
 
 ## Method 2 / OMIDIENT family (separate comparison)
 
-Dirichlet private (`P`) vs Method-2 AE private. Both OMIDIENT rows keep MOCSS-style shared; Method 2 + OMIDIENT uses Method-2 joint decode + VICReg with product-Dirichlet private. Not directly comparable to the AE-private compact panel above on private geometry.
+Dirichlet private (`P`) vs Method-2 AE private. Both OMIDIENT rows keep MOCSS-style shared; Method 2 + OMIDIENT uses Method-2 joint decode + VICReg with product-Dirichlet private. Not directly comparable to the AE-private compact panel above on private geometry. Own-view columns: Ridge R² \(X_m \leftarrow S_m\) / \(P_m\) / \([P_m;S_m]\) (mean over \(m\)).
 
-| Method | Best config | mean(S) NMI | concat(P) NMI | concat(P,S) NMI | ARI | Acc | kNN | subtype←S | Δ X R² | CKA | eval_loss |
-| ------ | ----------- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Method 2 (AE private) | `0.0004_0.0007_r1.5_c0.5_v0.1` | 0.3944 | 0.408 | 0.4199 | 0.2806 | 0.5200 | 0.70 | 0.7121 | +0.10 | 0.791 | 0.4693 |
-| Method 2 + OMIDIENT private | `0.0004_0.0007_r1.5_c0.5_v0.1_k4` | 0.3925 | 0.0432 | 0.3902 | 0.2694 | 0.5543 | 0.73 | 0.6970 | +0.78 | 0.702 | 0.4827 |
-| OMIDIENT (reported / no \(L_\mathrm{ortho}\)) | `0.0003_0.0005_4` (K=4) | 0.5019 | 0.0480 | 0.5019 | 0.4224 | 0.6629 | 0.80 | 0.7500 | +1.14 | 0.691 | — |
-| OMIDIENT (with \(L_\mathrm{ortho}\), λ-best) | `0.0003_0.0005_4_ortho_c2_r1.5_k1_o0.5` | 0.4537 | 0.0480 | 0.4470 | 0.3498 | 0.5943 | 0.73 | 0.7348 | +1.13 | 0.723 | 0.9568 |
+| Method | Best config | mean(S) NMI | concat(P) NMI | concat(P,S) NMI | Δ X R² | X←S own | X←P own | X←[P;S] own | CKA | eval_loss |
+| ------ | ----------- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Method 2 (AE private) | `0.0004_0.0007_r1.5_c0.5_v0.1` | 0.3944 | 0.408 | 0.4199 | +0.10 | 0.378 | 0.435 | 0.376 | 0.791 | 0.4693 |
+| Method 2 + OMIDIENT private | `0.0004_0.0007_r1.5_c0.5_v0.1_k4` | 0.3925 | 0.0432 | 0.3902 | +0.78 | 0.448 | −0.341 | 0.263 | 0.702 | 0.4827 |
+| OMIDIENT (reported / no \(L_\mathrm{ortho}\)) | `0.0003_0.0005_4` (K=4) | 0.5019 | 0.0480 | 0.5019 | +1.14 | 0.424 | −0.342 | 0.233 | 0.691 | — |
+| OMIDIENT (with \(L_\mathrm{ortho}\), λ-best) | `0.0003_0.0005_4_ortho_c2_r1.5_k1_o0.5` | 0.4537 | 0.0480 | 0.4470 | +1.13 | 0.428 | −0.342 | 0.244 | 0.723 | 0.9568 |
 
 ### Method 2 + OMIDIENT private — top 10 / detail
 
@@ -189,6 +194,7 @@ Package: `code/method2_omidient_private/`. Rank: `eval_loss = L_recon + L_ctr` (
 | mean(S) | 0.3925 | 0.2758 | — | 0.5600 | 0.73 |
 
 Probes: subtype←S_other = 0.6970 | X←S R² = −0.0881 | X←P R² = −0.8695 | Δ(S−P) = 0.7814  
+Own-view recon: X←S = 0.4476 | X←P = −0.3414 | X←[P;S] = 0.2627  
 Alignment: cosine = −0.0045 | CCA = 0.9745 | CKA = 0.7015
 
 ### OMIDIENT (reported / no \(L_\mathrm{ortho}\))
@@ -202,6 +208,7 @@ Repo BRCA checkpoint as released in this codebase (`0.0003_0.0005_4`). Trained w
 | mean(S) | 0.5019 | 0.4224 | 0.5732 | 0.6629 | 0.75 |
 
 Probes: subtype←S_other = 0.7500 | X←S R² = 0.2689 | X←P R² = −0.8695 | Δ(S−P) = 1.1384  
+Own-view recon: X←S = 0.4240 | X←P = −0.3419 | X←[P;S] = 0.2328  
 Alignment: cosine = −0.1559 | CCA = 0.9315 | CKA = 0.6907
 
 ### OMIDIENT (with \(L_\mathrm{ortho}\), λ-sweep best)
@@ -230,6 +237,7 @@ Intended OMIDIENT-style objective: `L = λ_ctr L_ctr + λ_recon L_recon + λ_kl 
 | 10 | `…_ortho_c2_r1.5_k1_o2` | 0.4609 | 0.4609 | 0.3761 | 0.6343 | 0.68 | 0.9612 |
 
 Probes (best): subtype←S_other = 0.7348 | X←S R² = 0.2653 | X←P R² = −0.8696 | Δ(S−P) = 1.1349  
+Own-view recon: X←S = 0.4278 | X←P = −0.3419 | X←[P;S] = 0.2442  
 Alignment: cosine = −0.1638 | CCA = 0.9265 | CKA = 0.7231
 
 ---
@@ -256,8 +264,18 @@ Repo training omitted `L_ortho`, so \(P\) and \(S\) had **no direct coupling**. 
 **OMIDIENT (with \(L_\mathrm{ortho}\)) — intended-style; free lunch disappears.**  
 Restoring elementwise ortho (λ-best) brings integration back to **~MOCSS-like** levels (`concat(P,S)≈0.45`, `mean(S)≈0.45`) while `concat(P)` stays ~0.05. Coupling \(P\) and \(S\) again removes the optimistic no-ortho gap; Dirichlet still keeps \(P\) subtype-weak, but does not deliver the 0.50 shared story once ortho is on.
 
+**Realization — reconstruction training ≠ clustering objective.**  
+In MOCSS/OMIDIENT, reconstruction (+ ortho / contrastive / …) is a **self-supervised proxy** used to shape \(S\) and \(P\); the paper-level end task is **unsupervised subtyping** (KMeans on fused latents → NMI). Those two are **not automatically coordinated**: embeddings that are good for reconstructing \(X\) need not be geometry that KMeans likes, and vice versa. Diagnostics make that mismatch concrete, e.g.:
+
+- **VICReg + `b_m` (best AE split so far):** lowest `concat(P)` NMI among AE methods (~0.25) with still-high `mean(S)` NMI (~0.45) and solid own-view recon (X←S ≈ 0.36, X←P ≈ 0.42, X←[P;S] ≈ 0.35) — closest to the intended definition (\(S\) subtype-rich, \(P\) less so, both still reconstructive within view). **Even this run lacks cross-view reconstruction**: X←S_other / X←P_other R² ≈ 0 / +0.02 (Δ ≈ −0.03), so foreign codes barely predict \(X_A\).
+- **M1 + `b_m`:** `concat(P)` NMI only ~0.33, but own-view X←P R² = 0.43 (and cross-view Δ X R² −0.19) — \(P\) is **recon-friendly, not subtype-cluster-friendly**; stronger own-shared insufficiency than VICReg (X←S own only 0.27).
+- **MOCSS:** high `concat(P)` / `concat(P,S)` NMI, yet cross-view X←S / X←P R² both **negative**, while own-view X←P R² = 0.49 is the strongest AE private recon — **cluster-friendly codes need not be cross-view reconstructive**.
+- **Dirichlet \(P\)** (OMIDIENT / M2+OMI): own-view X←P R² ≈ −0.34 (worse than mean) with `concat(P)` NMI ≈ 0.05 — private is neither subtype- nor (linearly) recon-useful; \(S\) carries almost all own-view recon.
+
+So the open design question is not only “better AE losses,” but **how to define tasks or design a system under the hood which is aligned with the final clustering/subtyping goal** (and, for this thesis, with a true shared/private split). Reconstruction alone does not guarantee that — and even the best current AE split (VICReg+`b_m`) still fails the cross-view recon story that would make \(S\) “shared” in the Method-1 sense.
+
 **Takeaway.**  
-The strongest-looking “shared” result in the table is the **uncoupled** Dirichlet run and should not be sold as true OMIDIENT. Among AE-private methods, VICReg+`b_m` is the most coherent split so far, but it still does not clearly beat MOCSS on joint clustering. Method 2 needs a stronger shared definition if the goal is real \(S\)/\(P\) separation rather than a milder MOCSS.
+The strongest-looking “shared” result in the table is the **uncoupled** Dirichlet run and should not be sold as true OMIDIENT. Among AE-private methods, VICReg+`b_m` is the most coherent split so far, but it still does not clearly beat MOCSS on joint clustering. Method 2 needs a stronger shared definition if the goal is real \(S\)/\(P\) separation rather than a milder MOCSS. The deeper issue is **proxy–target misalignment**: recon-trained \(S\)/\(P\) are not necessarily clustering-optimal (or decomposition-optimal).
 
 ---
 
