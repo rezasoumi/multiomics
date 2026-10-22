@@ -673,6 +673,294 @@ def train_omidient(run: dict, seed: int, epochs: int, batch_size: int, resume: b
     return path
 
 
+def train_method3(run: dict, seed: int, epochs: int, batch_size: int, resume: bool) -> str:
+    from torch.utils.data import DataLoader
+
+    from multiomics.code.method3_spectral_graph.model import (
+        SharedAndSpecificEmbedding,
+        SharedAndSpecificLoss,
+    )
+    from multiomics.code.method3_spectral_graph.training import (
+        EarlyStopper,
+        train,
+        validation,
+    )
+    from multiomics.code.method3_spectral_graph.evaluate import (
+        SPECTRAL_DIM,
+        evaluate_config,
+        _truth_from_label,
+    )
+    from multiomics.code.method3_spectral_graph.graph_spectral import (
+        compute_and_save_targets,
+        nmi_on_spectral_U,
+    )
+    from multiomics.code.method3_spectral_graph.hyperparam_tuning import (
+        SpectralOmicsDataset,
+        fixed_eval_loss,
+        _index_split,
+    )
+    from multiomics.code.multiseed.paths import repo_results_root
+
+    hp = run['hparams']
+    path = seed_run_dir(run['results_subdir'], run['base_config'], seed)
+    os.makedirs(path, exist_ok=True)
+    if _already_done(path, resume):
+        print('Skip (resume): {}'.format(path))
+        return path
+
+    use_gpu = _use_gpu()
+    _setup_seed(seed)
+    num_clust = 5
+    k_nn, d_pca, r_spec = 15, 50, SPECTRAL_DIM
+
+    view1_data, view2_data, view3_data, view_train_concatenate, y_true = load_data(DISEASE)
+    # Spectral targets are deterministic (random_state=21); reuse shared cache under results/
+    U_all, cluster_all, meta = compute_and_save_targets(
+        DISEASE,
+        view1_data,
+        view2_data,
+        view3_data,
+        n_clusters=num_clust,
+        k_nn=k_nn,
+        d_pca=d_pca,
+        r=r_spec,
+        random_state=21,
+        repo_results_root=repo_results_root(),
+        force=False,
+    )
+    nmi_u = nmi_on_spectral_U(
+        U_all, _truth_from_label(DISEASE, y_true), num_clust
+    )
+    print('Spectral ceiling nmi_spectral_U = {:.4f} | meta={}'.format(nmi_u, meta))
+
+    idx_train, idx_val, idx_test = _index_split(len(view_train_concatenate))
+    X_train = view_train_concatenate[idx_train]
+    X_val = view_train_concatenate[idx_val]
+    X_test = view_train_concatenate[idx_test]
+    y_arr = np.asarray(y_true)
+    y_train, y_val, y_test = y_arr[idx_train], y_arr[idx_val], y_arr[idx_test]
+    U_train, U_val = U_all[idx_train], U_all[idx_val]
+    c_train, c_val = cluster_all[idx_train], cluster_all[idx_val]
+
+    model = SharedAndSpecificEmbedding(
+        view_size=[view1_data.shape[1], view2_data.shape[1], view3_data.shape[1]],
+        n_units_1=[512, 256, 128, 32],
+        n_units_2=[512, 256, 128, 32],
+        n_units_3=[256, 128, 64, 32],
+        mlp_size=[32, 8],
+        spectral_dim=r_spec,
+        n_clusters=num_clust,
+    )
+    if use_gpu:
+        model = model.cuda()
+
+    train_loader = DataLoader(
+        SpectralOmicsDataset(X_train, U_train, c_train),
+        batch_size=batch_size,
+        shuffle=True,
+        drop_last=True,
+    )
+    val_loader = DataLoader(
+        SpectralOmicsDataset(X_val, U_val, c_val),
+        batch_size=batch_size,
+        shuffle=False,
+        drop_last=True,
+    )
+    optimizer = torch.optim.Adam(
+        model.parameters(), lr=hp['lr'], weight_decay=hp['weight_decay']
+    )
+    loss_function = SharedAndSpecificLoss(
+        lambda_spec=hp['lambda_spec'],
+        lambda_res=hp['lambda_res'],
+        lambda_ctr=hp['lambda_ctr'],
+        lambda_vic=hp['lambda_vic'],
+        lambda_view=hp['lambda_view'],
+        lambda_leak=hp['lambda_leak'],
+    )
+    early_stopper = EarlyStopper(patience=20, min_delta=0.005)
+    loss_best = np.inf
+    best_state = None
+    best_terms = None
+
+    for epoch in range(epochs):
+        grl_lambda = min(1.0, (epoch + 1) / 20.0)
+        train(
+            train_loader, view1_data, view2_data, model, loss_function,
+            TEMPERATURE, optimizer, epoch, use_gpu, epochs, grl_lambda=grl_lambda,
+        )
+        val_loss, avg_terms = validation(
+            val_loader, view1_data, view2_data, model, TEMPERATURE, loss_function,
+            use_gpu, epoch, epochs, grl_lambda=grl_lambda,
+        )
+        print('epoch {0} done'.format(epoch))
+        if val_loss < loss_best:
+            loss_best = val_loss
+            best_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
+            best_terms = dict(avg_terms)
+        if early_stopper.early_stop(val_loss):
+            print('Early stopping at epoch {}'.format(epoch))
+            break
+
+    if best_state is None:
+        best_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
+    if best_terms is None:
+        _, best_terms = validation(
+            val_loader, view1_data, view2_data, model, TEMPERATURE, loss_function,
+            use_gpu, 0, epochs,
+        )
+    eval_loss = fixed_eval_loss(best_terms)
+    torch.save(best_state, model_path(path))
+    _save_splits(path, X_train, X_val, X_test, y_train, y_val, y_test)
+    np.save(os.path.join(path, 'loss.npy'), loss_best)
+    np.save(os.path.join(path, 'eval_loss.npy'), eval_loss)
+
+    metrics = evaluate_config(DISEASE, path, plot=False)
+    metrics['nmi_spectral_U'] = float(nmi_u)
+    payload = _enrich_metrics(metrics, eval_loss=eval_loss)
+    payload.update({
+        'run_id': run['id'],
+        'method': run['method'],
+        'base_config': run['base_config'],
+        'seed': int(seed),
+        'val_loss': float(loss_best),
+    })
+    _write_metrics(path, payload)
+    return path
+
+
+def train_method4(run: dict, seed: int, epochs: int, batch_size: int, resume: bool) -> str:
+    from multiomics.code.method4_invariant_cluster.model import (
+        SharedAndSpecificEmbedding,
+        SharedAndSpecificLoss,
+    )
+    from multiomics.code.method4_invariant_cluster.training import (
+        EarlyStopper,
+        train,
+        validation,
+        init_centroids_kmeans,
+    )
+    from multiomics.code.method4_invariant_cluster.evaluate import evaluate_config
+    from multiomics.code.method4_invariant_cluster.hyperparam_tuning import (
+        WARMUP_EPOCHS,
+        fixed_eval_loss,
+    )
+
+    hp = run['hparams']
+    path = seed_run_dir(run['results_subdir'], run['base_config'], seed)
+    os.makedirs(path, exist_ok=True)
+    if _already_done(path, resume):
+        print('Skip (resume): {}'.format(path))
+        return path
+
+    use_gpu = _use_gpu()
+    _setup_seed(seed)
+    num_clust = 5
+
+    view1_data, view2_data, view3_data, view_train_concatenate, y_true = load_data(DISEASE)
+    model = SharedAndSpecificEmbedding(
+        view_size=[view1_data.shape[1], view2_data.shape[1], view3_data.shape[1]],
+        n_units_1=[512, 256, 128, 32],
+        n_units_2=[512, 256, 128, 32],
+        n_units_3=[256, 128, 64, 32],
+        mlp_size=[32, 8],
+        n_clusters=num_clust,
+    )
+    if use_gpu:
+        model = model.cuda()
+
+    X_train, X_val, X_test, y_train, y_val, y_test = _split_data(
+        view_train_concatenate, y_true
+    )
+    train_loader = torch.utils.data.DataLoader(
+        dataset=X_train, batch_size=batch_size, shuffle=True, drop_last=True
+    )
+    val_loader = torch.utils.data.DataLoader(
+        dataset=X_val, batch_size=batch_size, shuffle=False, drop_last=True
+    )
+    optimizer = torch.optim.Adam(
+        model.parameters(), lr=hp['lr'], weight_decay=hp['weight_decay']
+    )
+    loss_function = SharedAndSpecificLoss(
+        lambda_dec=hp['lambda_dec'],
+        lambda_agree=hp['lambda_agree'],
+        lambda_res=hp['lambda_res'],
+        lambda_view=hp['lambda_view'],
+        lambda_leak=hp['lambda_leak'],
+        lambda_ctr=hp['lambda_ctr'],
+        lambda_vic=hp['lambda_vic'],
+        warm_up=True,
+    )
+    early_stopper = EarlyStopper(patience=20, min_delta=0.005)
+    loss_best = np.inf
+    best_state = None
+    best_terms = None
+    centroids_inited = False
+
+    for epoch in range(epochs):
+        if epoch < WARMUP_EPOCHS:
+            loss_function.warm_up = True
+        else:
+            if not centroids_inited:
+                init_centroids_kmeans(
+                    model, train_loader, view1_data, view2_data, use_gpu, num_clust
+                )
+                centroids_inited = True
+            loss_function.warm_up = False
+
+        grl_lambda = (
+            0.0
+            if loss_function.warm_up
+            else min(1.0, (epoch - WARMUP_EPOCHS + 1) / 20.0)
+        )
+        train(
+            train_loader, view1_data, view2_data, model, loss_function,
+            TEMPERATURE, optimizer, epoch, use_gpu, epochs, grl_lambda=grl_lambda,
+        )
+        val_loss, avg_terms = validation(
+            val_loader, view1_data, view2_data, model, TEMPERATURE, loss_function,
+            use_gpu, epoch, epochs, grl_lambda=grl_lambda,
+        )
+        print('epoch {0} done (warm_up={1})'.format(epoch, loss_function.warm_up))
+
+        if not loss_function.warm_up:
+            if val_loss < loss_best:
+                loss_best = val_loss
+                best_state = {
+                    k: v.detach().cpu().clone() for k, v in model.state_dict().items()
+                }
+                best_terms = dict(avg_terms)
+            if early_stopper.early_stop(val_loss):
+                print('Early stopping at epoch {}'.format(epoch))
+                break
+
+    if best_state is None:
+        best_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
+        loss_function.warm_up = False
+        _, best_terms = validation(
+            val_loader, view1_data, view2_data, model, TEMPERATURE, loss_function,
+            use_gpu, 0, epochs,
+        )
+        loss_best = float(best_terms.get('val_score', 0.0))
+
+    eval_loss = fixed_eval_loss(best_terms)
+    torch.save(best_state, model_path(path))
+    _save_splits(path, X_train, X_val, X_test, y_train, y_val, y_test)
+    np.save(os.path.join(path, 'loss.npy'), loss_best)
+    np.save(os.path.join(path, 'eval_loss.npy'), eval_loss)
+
+    metrics = evaluate_config(DISEASE, path, plot=False)
+    payload = _enrich_metrics(metrics, eval_loss=eval_loss)
+    payload.update({
+        'run_id': run['id'],
+        'method': run['method'],
+        'base_config': run['base_config'],
+        'seed': int(seed),
+        'val_loss': float(loss_best),
+    })
+    _write_metrics(path, payload)
+    return path
+
+
 TRAINERS: Dict[str, Callable[..., str]] = {
     'mocss': train_mocss,
     'method1': train_method1,
@@ -680,6 +968,8 @@ TRAINERS: Dict[str, Callable[..., str]] = {
     'method2': train_method2,
     'method2_omidient': train_method2_omidient,
     'omidient': train_omidient,
+    'method3': train_method3,
+    'method4': train_method4,
 }
 
 
