@@ -3,8 +3,16 @@
 from __future__ import annotations
 
 import numpy as np
+from munkres import Munkres
 from sklearn.cluster import KMeans
-from sklearn.metrics import accuracy_score, normalized_mutual_info_score, adjusted_rand_score
+from sklearn.metrics import (
+    accuracy_score,
+    adjusted_rand_score,
+    confusion_matrix,
+    fowlkes_mallows_score,
+    normalized_mutual_info_score,
+    v_measure_score,
+)
 from sklearn.model_selection import train_test_split
 from sklearn.neighbors import KNeighborsClassifier
 
@@ -25,6 +33,20 @@ def truth_from_label(disease, label):
     if disease == 'kirc':
         return label[:, 1].flatten().astype('int')
     return label.flatten()
+
+
+def hungarian_accuracy(y_true, y_pred):
+    """Acc after optimal 1–1 remapping; safe when #pred clusters ≠ #true labels."""
+    y_true = np.asarray(y_true).astype(int).ravel()
+    y_pred = np.asarray(y_pred).astype(int).ravel()
+    _, y_true_m = np.unique(y_true, return_inverse=True)
+    _, y_pred_m = np.unique(y_pred, return_inverse=True)
+    n = int(max(y_true_m.max(), y_pred_m.max()) + 1)
+    cm = confusion_matrix(y_true_m, y_pred_m, labels=np.arange(n))
+    cost = evaluation.calculate_cost_matrix(cm, n)
+    indices = Munkres().compute(cost)
+    mapping = evaluation.get_cluster_labels_from_indices(indices).astype(int)
+    return float(accuracy_score(y_true_m, mapping[y_pred_m]))
 
 
 def cluster_metrics(X, y, n_clusters, random_state=21):
@@ -48,17 +70,20 @@ def cluster_metrics(X, y, n_clusters, random_state=21):
 
 
 def assignment_metrics(pred, y):
-    """Metrics when hard labels are already given (DEC argmax / consensus)."""
+    """Metrics when hard labels are already given (DEC argmax / consensus).
+
+    Unlike evaluation.evaluate, this allows #predicted clusters ≠ #true labels
+    (e.g. Cluster D grid with K_c ∈ {4,5,6} on BRCA subtypes=5).
+    """
     y = np.asarray(y).flatten()
     pred = np.asarray(pred).flatten()
-    nmi, ari, f_score, acc, v_measure, ch_index = evaluation.evaluate(y, pred)
     return {
-        'nmi_assign': float(nmi),
-        'ari_assign': float(ari),
-        'f_score_assign': float(f_score),
-        'acc_assign': float(acc),
-        'v_measure_assign': float(v_measure),
-        'ch_index_assign': float(ch_index),
+        'nmi_assign': float(normalized_mutual_info_score(y, pred)),
+        'ari_assign': float(adjusted_rand_score(y, pred)),
+        'f_score_assign': float(fowlkes_mallows_score(y, pred)),
+        'acc_assign': hungarian_accuracy(y, pred),
+        'v_measure_assign': float(v_measure_score(y, pred)),
+        'ch_index_assign': float('nan'),  # needs feature matrix; N/A for label-only
     }
 
 
