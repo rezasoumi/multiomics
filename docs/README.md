@@ -19,6 +19,66 @@ Config name prefixes like `0.0004_0.0007` are learning-rate / weight-decay setti
 
 ---
 
+## Figures (visual color code)
+
+**Color language (same in every plot):** blue = shared \(S\); orange = private \(P\); purple/gray = concat \([P;S]\); green↔red = signed gaps / \(\Delta\) around 0.
+
+| # | File | What it shows | Needs checkpoints? |
+| - | ---- | ------------- | ------------------ |
+| 1 | [`figures/01_nmi_bars_ae.png`](./figures/01_nmi_bars_ae.png), [`01_nmi_bars_omidient.png`](./figures/01_nmi_bars_omidient.png) | mean(S) / concat(P) / concat(P,S) NMI bars | No (README numbers) |
+| 2 | [`figures/02_scatter_separation_vs_delta_xr2.png`](./figures/02_scatter_separation_vs_delta_xr2.png) | subtype separation vs \(\Delta\) X R² | No |
+| 3 | [`figures/03_metric_heatmap_ae.png`](./figures/03_metric_heatmap_ae.png), [`03_metric_heatmap_omidient.png`](./figures/03_metric_heatmap_omidient.png) | color-coded compact metrics | No |
+| 4 | [`figures/04_method_schematic.png`](./figures/04_method_schematic.png) | process schematic (\(S\)/\(P\)/losses) | No |
+| 5 | [`figures/05_embedding_umap.png`](./figures/05_embedding_umap.png) (or `…_tsne`) | UMAP/t-SNE of mean(S) vs concat(P), colored by subtype | Yes (existing models) |
+| 6 | [`figures/06_sweep_*.png`](./figures/) | hyperparameter heatmaps from leaderboard CSVs | Yes (existing CSVs) |
+
+**Regenerate on Triton** (no retraining):
+
+```bash
+cd /scratch/work/soumir1/githubmultiomics/multiomics
+sbatch run_viz.slurm
+# outputs → docs/figures/*.png and *.pdf
+```
+
+**Or locally / interactively** (set `PYTHONPATH` to the parent of `multiomics`):
+
+```bash
+export MULTIOMICS_RESULTS=/path/to/multiomics/results   # Triton results root
+python -m multiomics.code.viz.run_all --mode readme     # figs 1–4 only
+python -m multiomics.code.viz.run_all --mode all        # all six
+```
+
+Code: `code/viz/` (`run_all.py`, `plots.py`). Fig 5 reuses `code/diagnose_shared_private.py::load_latents`.
+
+### Fig 1 — NMI bars (S / P / [P;S])
+
+![NMI bars AE](./figures/01_nmi_bars_ae.png)
+
+![NMI bars OMIDIENT family](./figures/01_nmi_bars_omidient.png)
+
+### Fig 2 — Separation vs Δ X R²
+
+![Scatter separation vs delta X R2](./figures/02_scatter_separation_vs_delta_xr2.png)
+
+### Fig 3 — Color-coded metrics
+
+![Metric heatmap AE](./figures/03_metric_heatmap_ae.png)
+
+![Metric heatmap OMIDIENT](./figures/03_metric_heatmap_omidient.png)
+
+### Fig 4 — Process schematic
+
+![Method schematic](./figures/04_method_schematic.png)
+
+### Fig 5–6 — embeddings & sweeps
+
+Generate on Triton with `sbatch run_viz.slurm` (needs checkpoints / leaderboard CSVs under `results/`). After that, this section will show:
+
+- `figures/05_embedding_umap.png` (or `05_embedding_tsne.png`)
+- `figures/06_sweep_method1.png`, `06_sweep_method1_vicreg.png`, `06_sweep_method2.png`, `06_sweep_method2_omidient.png`, `06_sweep_omidient_ortho.png`
+
+---
+
 ## Compact comparison (AE private)
 
 Shared / private diagnostic panel (BRCA). `gap S−PS` = mean(S) NMI − concat(P,S) NMI (large positive ⇒ private hurts integration). `Δ X R²` = R²(X←S_other) − R²(X←P_other). Own-view columns: Ridge R² for \(X_m \leftarrow S_m\) / \(P_m\) / \([P_m;S_m]\) (mean over \(m\)). Probe numbers for Method 1 / VICReg are from the final re-eval of the eval_loss winner.

@@ -161,11 +161,13 @@ def load_latents(method, disease, config_dir):
         return specific, shared, views, y, model, None
 
     if method == 'omidient':
+        from multiomics.code.prod_gamma_dirvae.evaluate import parse_k_from_config
         from multiomics.code.prod_gamma_dirvae.prod_gamma_dirvae_cancer import (
             SharedAndSpecificEmbedding,
         )
 
-        k_groups = int(os.path.basename(config_dir.rstrip('/')).split('_')[-1])
+        # Folder may be lr_wd_K or lr_wd_K_ortho_c…_o… — never take the last token.
+        k_groups = parse_k_from_config(os.path.basename(config_dir.rstrip('/')))
         model = SharedAndSpecificEmbedding(
             'ProdGamDirVae',
             k_groups,

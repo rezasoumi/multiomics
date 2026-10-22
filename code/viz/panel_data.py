@@ -1,0 +1,181 @@
+"""Compact-panel numbers mirrored from docs/README.md (BRCA, eval_loss winners).
+
+These are the published comparison rows — plot figs 1–3 without touching checkpoints.
+"""
+
+from __future__ import annotations
+
+# AE-private compact comparison (README table)
+AE_PANEL = [
+    {
+        'label': 'MOCSS',
+        'short': 'MOCSS',
+        's_nmi': 0.422,
+        'p_nmi': 0.448,
+        'ps_nmi': 0.450,
+        'gap_s_ps': -0.03,
+        'delta_x_r2': 0.06,
+        'x_s_own': 0.420,
+        'x_p_own': 0.488,
+        'x_ps_own': 0.372,
+        'cka': 0.75,
+        'family': 'ae',
+    },
+    {
+        'label': 'M1 + b_m',
+        'short': 'M1 + b_m',
+        's_nmi': 0.453,
+        'p_nmi': 0.330,
+        'ps_nmi': 0.398,
+        'gap_s_ps': 0.06,
+        'delta_x_r2': -0.19,
+        'x_s_own': 0.266,
+        'x_p_own': 0.429,
+        'x_ps_own': 0.341,
+        'cka': 0.72,
+        'family': 'ae',
+    },
+    {
+        'label': 'VICReg + b_m',
+        'short': 'VICReg + b_m',
+        's_nmi': 0.447,
+        'p_nmi': 0.248,
+        'ps_nmi': 0.437,
+        'gap_s_ps': 0.01,
+        'delta_x_r2': -0.03,
+        'x_s_own': 0.358,
+        'x_p_own': 0.420,
+        'x_ps_own': 0.354,
+        'cka': 0.80,
+        'family': 'ae',
+    },
+    {
+        'label': 'M2 (AE)',
+        'short': 'M2 (AE)',
+        's_nmi': 0.394,
+        'p_nmi': 0.408,
+        'ps_nmi': 0.420,
+        'gap_s_ps': -0.03,
+        'delta_x_r2': 0.10,
+        'x_s_own': 0.378,
+        'x_p_own': 0.435,
+        'x_ps_own': 0.376,
+        'cka': 0.79,
+        'family': 'ae',
+    },
+]
+
+# Method 2 / OMIDIENT family (separate comparison table)
+OMI_PANEL = [
+    {
+        'label': 'M2 (AE)',
+        'short': 'M2 (AE)',
+        's_nmi': 0.3944,
+        'p_nmi': 0.408,
+        'ps_nmi': 0.4199,
+        'gap_s_ps': 0.3944 - 0.4199,
+        'delta_x_r2': 0.10,
+        'x_s_own': 0.378,
+        'x_p_own': 0.435,
+        'x_ps_own': 0.376,
+        'cka': 0.791,
+        'family': 'omi',
+    },
+    {
+        'label': 'M2 + OMIDIENT P',
+        'short': 'M2+OMI P',
+        's_nmi': 0.3925,
+        'p_nmi': 0.0432,
+        'ps_nmi': 0.3902,
+        'gap_s_ps': 0.3925 - 0.3902,
+        'delta_x_r2': 0.78,
+        'x_s_own': 0.448,
+        'x_p_own': -0.341,
+        'x_ps_own': 0.263,
+        'cka': 0.702,
+        'family': 'omi',
+    },
+    {
+        'label': 'OMIDIENT (no ortho)',
+        'short': 'OMI (no ortho)',
+        's_nmi': 0.5019,
+        'p_nmi': 0.0480,
+        'ps_nmi': 0.5019,
+        'gap_s_ps': 0.0,
+        'delta_x_r2': 1.14,
+        'x_s_own': 0.424,
+        'x_p_own': -0.342,
+        'x_ps_own': 0.233,
+        'cka': 0.691,
+        'family': 'omi',
+    },
+    {
+        'label': 'OMIDIENT (+ortho)',
+        'short': 'OMI (+ortho)',
+        's_nmi': 0.4537,
+        'p_nmi': 0.0480,
+        'ps_nmi': 0.4470,
+        'gap_s_ps': 0.4537 - 0.4470,
+        'delta_x_r2': 1.13,
+        'x_s_own': 0.428,
+        'x_p_own': -0.342,
+        'x_ps_own': 0.244,
+        'cka': 0.723,
+        'family': 'omi',
+    },
+]
+
+# Checkpoints used for UMAP (eval_loss winners + OMIDIENT pair)
+UMAP_JOBS = [
+    ('mocss', '0.0004_0.0007', 'MOCSS'),
+    ('method1', '0.0004_0.0007_a1.5_b0.7_g0.7_p0.5_l1.0', 'M1 + b_m'),
+    ('method1_vicreg', '0.0004_0.0007_a0.7_b0.5_v0.1_p1.0_l1.0', 'VICReg + b_m'),
+    ('method2', '0.0004_0.0007_r1.5_c0.5_v0.1', 'M2 (AE)'),
+    ('method2_omidient', '0.0004_0.0007_r1.5_c0.5_v0.1_k4', 'M2 + OMIDIENT P'),
+    ('omidient', '0.0003_0.0005_4', 'OMIDIENT (no ortho)'),
+    ('omidient', '0.0003_0.0005_4_ortho_c2_r1.5_k1_o0.5', 'OMIDIENT (+ortho)'),
+]
+
+# Leaderboard CSVs for sweep heatmaps (relative to MULTIOMICS_RESULTS)
+SWEEP_SPECS = [
+    {
+        'name': 'method1',
+        'csv': 'models_brca_method1/leaderboard.csv',
+        'x': 'alpha',
+        'y': 'lambda_priv',
+        'filter_priv': True,
+        'title': 'Method 1 + b_m: α vs λ_priv',
+    },
+    {
+        'name': 'method1_vicreg',
+        'csv': 'models_brca_method1_vicreg/leaderboard.csv',
+        'x': 'alpha',
+        'y': 'lambda_priv',
+        'filter_priv': True,
+        'title': 'VICReg + b_m: α vs λ_priv',
+    },
+    {
+        'name': 'method2',
+        'csv': 'models_brca_method2/leaderboard.csv',
+        'x': 'lambda_rec',
+        'y': 'lambda_ctr',
+        'filter_priv': False,
+        'title': 'Method 2: λ_rec vs λ_ctr',
+    },
+    {
+        'name': 'method2_omidient',
+        'csv': 'models_brca_method2_omidient/leaderboard.csv',
+        'x': 'lambda_rec',
+        'y': 'lambda_ctr',
+        'filter_priv': False,
+        'title': 'Method 2 + OMIDIENT P: λ_rec vs λ_ctr',
+    },
+    {
+        'name': 'omidient_ortho',
+        'csv': 'models_brca_ProdGammaDirVae/leaderboard_ortho.csv',
+        'x': 'lambda_ctr',
+        'y': 'lambda_ortho',
+        'filter_priv': False,
+        'title': 'OMIDIENT + L_ortho: λ_ctr vs λ_ortho',
+    },
+]
