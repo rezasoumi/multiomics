@@ -1,4 +1,9 @@
-"""Hyperparameter sweep for Method 4 (invariant DEC + residual private).
+"""Hyperparameter sweep for Method 4 v2 (invariant DEC + residual private).
+
+v2 vs v1:
+  - stronger DEC (higher λ_dec, sharpen=2.5), milder agree
+  - weaker λ_res, stronger λ_leak
+  - results under models_{disease}_method4_v2/
 
 Warm-up: first WARMUP_EPOCHS use contrastive + residual + view only, then
 init DEC centroids via KMeans on mean(S), then full loss.
@@ -44,16 +49,18 @@ NUM_CLUST = {'lihc': 2, 'coad': 4, 'kirc': 2, 'brca': 5}[disease]
 LR = {'brca': 0.0004, 'kirc': 0.0002, 'coad': 0.0002, 'lihc': 0.0002}[disease]
 WEIGHT_DECAY = {'brca': 0.0007, 'kirc': 0.0007, 'coad': 0.0007, 'lihc': 0.0007}[disease]
 
-LAMBDA_DEC_GRID = [0.5, 1.0, 1.5]
-LAMBDA_AGREE_GRID = [0.5, 1.0, 2.0]
-LAMBDA_RES_GRID = [0.3, 0.5, 1.0]
-LAMBDA_LEAK_GRID = [0.5, 1.0, 2.0]
+# v2: stronger clustering, milder agree, weaker residual, stronger leak
+LAMBDA_DEC_GRID = [1.0, 1.5, 2.0]
+LAMBDA_AGREE_GRID = [0.5, 1.0, 1.5]
+LAMBDA_RES_GRID = [0.1, 0.3, 0.5]
+LAMBDA_LEAK_GRID = [1.0, 2.0, 3.0]
 LAMBDA_VIEW_FIXED = 0.5
 LAMBDA_CTR_FIXED = 0.5
 LAMBDA_VIC_FIXED = 0.1
+SHARPEN_FIXED = 2.5
 
 LAMBDA_VIEW_GRID = [0.3, 0.5, 1.0]
-LAMBDA_CTR_GRID = [0.0, 0.5]
+LAMBDA_CTR_GRID = [0.3, 0.5, 1.0]
 LAMBDA_VIC_GRID = [0.0, 0.1]
 
 MINIMIZE_METRICS = frozenset({'eval_loss', 'val_loss', 'agree_symkl_mean'})
@@ -85,7 +92,7 @@ def config_name(lr, wd, lambda_dec, lambda_agree, lambda_res, lambda_view, lambd
 
 
 def results_parent():
-    return '../../results/models_{}_method4'.format(disease)
+    return '../../results/models_{}_method4_v2'.format(disease)
 
 
 def leaderboard_path():
@@ -232,6 +239,7 @@ def train_one(
         lambda_ctr=lambda_ctr,
         lambda_vic=lambda_vic,
         warm_up=True,
+        sharpen=SHARPEN_FIXED,
     )
 
     history_path = os.path.join(path, 'epoch_history.csv')

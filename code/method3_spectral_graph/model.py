@@ -1,4 +1,9 @@
-"""Method 3: spectral shared + residual private + view-ID + GRL non-leakage."""
+"""Method 3 v2: spectral shared + true residual private + view-ID + GRL leak.
+
+v2 private path:
+  shared_dec(S) -> X̂_S
+  private_dec(P) -> residual  (linear out); target = X - sg(X̂_S)
+"""
 
 import torch
 from torch import nn
@@ -32,11 +37,18 @@ def _encode(layers, x):
     return out
 
 
-def _decode(layers, z):
+def _decode_sigmoid(layers, z):
     out = z
     for layer in layers[:-1]:
         out = F.tanh(layer(out))
     return torch.sigmoid(layers[-1](out))
+
+
+def _decode_linear(layers, z):
+    out = z
+    for layer in layers[:-1]:
+        out = F.tanh(layer(out))
+    return layers[-1](out)
 
 
 def _off_diagonal(x):
@@ -48,18 +60,14 @@ def vicreg_ps_independence(private, shared, eps=1e-4):
     p = private - private.mean(dim=0)
     s = shared - shared.mean(dim=0)
     batch = max(p.shape[0] - 1, 1)
-
     std_p = torch.sqrt(p.var(dim=0) + eps)
     std_s = torch.sqrt(s.var(dim=0) + eps)
     var_loss = torch.mean(F.relu(1.0 - std_p)) + torch.mean(F.relu(1.0 - std_s))
-
     cov_p = (p.T @ p) / batch
     cov_s = (s.T @ s) / batch
     cov_loss = _off_diagonal(cov_p).pow(2).mean() + _off_diagonal(cov_s).pow(2).mean()
-
     cross = (p.T @ s) / batch
-    cross_loss = cross.pow(2).mean()
-    return var_loss + cov_loss + cross_loss
+    return var_loss + cov_loss + cross.pow(2).mean()
 
 
 class GradReverse(torch.autograd.Function):
@@ -78,12 +86,6 @@ def grad_reverse(x, lambd=1.0):
 
 
 class SharedAndSpecificEmbedding(nn.Module):
-    """
-    Shared: Enc -> S; f_spec(mean(S)) -> Û
-    Private: Enc -> P; Dec(P, sg(S)) -> X
-    Heads: MLP contrastive, view_id(P), Adv(P)->cluster (GRL)
-    """
-
     def __init__(
         self,
         view_size,
@@ -91,7 +93,7 @@ class SharedAndSpecificEmbedding(nn.Module):
         n_units_2,
         n_units_3,
         mlp_size,
-        spectral_dim=16,
+        spectral_dim=24,
         n_clusters=5,
     ):
         super().__init__()
@@ -102,7 +104,8 @@ class SharedAndSpecificEmbedding(nn.Module):
 
         self.shared_enc = nn.ModuleDict()
         self.specific_enc = nn.ModuleDict()
-        self.residual_dec = nn.ModuleDict()
+        self.shared_dec = nn.ModuleDict()
+        self.private_dec = nn.ModuleDict()
         self.mlp = nn.ModuleDict()
 
         for i in (1, 2, 3):
@@ -112,7 +115,8 @@ class SharedAndSpecificEmbedding(nn.Module):
             e = u[-1]
             self.shared_enc[j] = _build_encoder(vs, u)
             self.specific_enc[j] = _build_encoder(vs, u)
-            self.residual_dec[j] = _build_decoder(2 * e, u, vs)
+            self.shared_dec[j] = _build_decoder(e, u, vs)
+            self.private_dec[j] = _build_decoder(e, u, vs)
             self.mlp[j] = nn.ModuleList([
                 nn.Linear(e, mlp_size[0]),
                 nn.Linear(mlp_size[0], mlp_size[1]),
@@ -153,22 +157,21 @@ class SharedAndSpecificEmbedding(nn.Module):
             shared_mlp[i] = F.tanh(self.mlp[j][1](h))
         return specific, shared, shared_mlp
 
-    def decode_residual(self, specific, shared):
-        rec = {}
+    def decode_views(self, specific, shared):
+        shared_rec, private_res = {}, {}
         for i in (1, 2, 3):
             j = str(i)
-            s_det = shared[i].detach()
-            rec[i] = _decode(self.residual_dec[j], torch.cat([specific[i], s_det], dim=1))
-        return rec
+            shared_rec[i] = _decode_sigmoid(self.shared_dec[j], shared[i])
+            private_res[i] = _decode_linear(self.private_dec[j], specific[i])
+        return shared_rec, private_res
 
     def forward(self, view1, view2, view3, grl_lambda=1.0):
         specific, shared, shared_mlp = self.encode_views(view1, view2, view3)
-        residual_rec = self.decode_residual(specific, shared)
+        shared_rec, private_res = self.decode_views(specific, shared)
         s_bar = (shared[1] + shared[2] + shared[3]) / 3.0
         u_hat = self.f_spec(s_bar)
 
-        view_logits = {}
-        adv_logits = {}
+        view_logits, adv_logits = {}, {}
         for i in (1, 2, 3):
             view_logits[i] = self.view_head(specific[i])
             adv_logits[i] = self.adv_cluster(grad_reverse(specific[i], grl_lambda))
@@ -177,7 +180,8 @@ class SharedAndSpecificEmbedding(nn.Module):
             'specific': specific,
             'shared': shared,
             'shared_mlp': shared_mlp,
-            'residual_rec': residual_rec,
+            'shared_rec': shared_rec,
+            'private_res': private_res,
             's_bar': s_bar,
             'u_hat': u_hat,
             'view_logits': view_logits,
@@ -189,11 +193,12 @@ class SharedAndSpecificLoss(nn.Module):
     def __init__(
         self,
         lambda_spec=1.0,
-        lambda_res=0.5,
-        lambda_ctr=0.3,
+        lambda_res=0.3,
+        lambda_ctr=0.5,
         lambda_vic=0.1,
         lambda_view=0.5,
-        lambda_leak=0.5,
+        lambda_leak=2.0,
+        lambda_srec=0.3,
     ):
         super().__init__()
         self.lambda_spec = lambda_spec
@@ -202,6 +207,7 @@ class SharedAndSpecificLoss(nn.Module):
         self.lambda_vic = lambda_vic
         self.lambda_view = lambda_view
         self.lambda_leak = lambda_leak
+        self.lambda_srec = lambda_srec
 
     @staticmethod
     def contrastive_loss(shared_1, shared_2, temperature, batch_size):
@@ -209,8 +215,7 @@ class SharedAndSpecificLoss(nn.Module):
         shared_2 = shared_2 - shared_2.mean()
         shared_1 = F.normalize(shared_1, p=2, dim=1)
         shared_2 = F.normalize(shared_2, p=2, dim=1)
-        criterion = InstanceLoss(batch_size=batch_size, temperature=temperature)
-        return criterion(shared_1, shared_2)
+        return InstanceLoss(batch_size=batch_size, temperature=temperature)(shared_1, shared_2)
 
     @staticmethod
     def reconstruction_loss(rec, ori):
@@ -221,8 +226,6 @@ class SharedAndSpecificLoss(nn.Module):
         return torch.linalg.matrix_norm(rec - ori)
 
     def _contrastive_term(self, out, temperature):
-        if self.lambda_ctr == 0.0:
-            return out['shared_mlp'][1].new_zeros(())
         mlp = out['shared_mlp']
         batch_size = mlp[1].shape[0]
         return (
@@ -240,15 +243,20 @@ class SharedAndSpecificLoss(nn.Module):
         return l_vic
 
     def forward(self, out, ori, u_target, cluster_labels, temperature):
-        """
-        L = λ_spec L_spec + λ_res L_res + λ_ctr L_ctr + λ_vic L_vic
-          + λ_view L_view + λ_leak L_leak
-        """
-        l_spec = F.mse_loss(out['u_hat'], u_target)
+        # Match spectral_dim dynamically (v1 r=16 / v2 r=24+)
+        u_hat = out['u_hat']
+        if u_hat.shape[1] != u_target.shape[1]:
+            d = min(u_hat.shape[1], u_target.shape[1])
+            l_spec = F.mse_loss(u_hat[:, :d], u_target[:, :d])
+        else:
+            l_spec = F.mse_loss(u_hat, u_target)
 
+        l_srec = 0.0
         l_res = 0.0
         for a in (1, 2, 3):
-            l_res = l_res + self.reconstruction_loss(out['residual_rec'][a], ori[a])
+            l_srec = l_srec + self.reconstruction_loss(out['shared_rec'][a], ori[a])
+            residual_tgt = ori[a] - out['shared_rec'][a].detach()
+            l_res = l_res + F.mse_loss(out['private_res'][a], residual_tgt)
 
         l_ctr = self._contrastive_term(out, temperature)
         l_vic = self._vicreg_term(out)
@@ -268,6 +276,7 @@ class SharedAndSpecificLoss(nn.Module):
         terms = {
             'l_spec': l_spec,
             'l_res': l_res,
+            'l_srec': l_srec,
             'l_ctr': l_ctr,
             'l_vic': l_vic,
             'l_view': l_view,
@@ -276,15 +285,16 @@ class SharedAndSpecificLoss(nn.Module):
         loss = (
             self.lambda_spec * l_spec
             + self.lambda_res * l_res
+            + self.lambda_srec * l_srec
             + self.lambda_ctr * l_ctr
             + self.lambda_vic * l_vic
             + self.lambda_view * l_view
             + self.lambda_leak * l_leak
         )
-        # Checkpoint score excludes leak (GRL can make scale odd)
         val_score = (
             self.lambda_spec * l_spec
             + self.lambda_res * l_res
+            + self.lambda_srec * l_srec
             + self.lambda_ctr * l_ctr
             + self.lambda_vic * l_vic
             + self.lambda_view * l_view

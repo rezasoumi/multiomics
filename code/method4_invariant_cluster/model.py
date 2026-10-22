@@ -83,9 +83,9 @@ def student_t_q(embeddings, centroids, alpha=1.0):
     return q
 
 
-def target_distribution(q):
-    """DEC target p_ik ∝ q_ik^2 / Σ_i q_ik."""
-    weight = (q ** 2) / q.sum(dim=0, keepdim=True).clamp_min(1e-8)
+def target_distribution(q, sharpen=2.0):
+    """DEC target p_ik ∝ q_ik^sharpen / Σ_i q_ik (v2 default sharpen=2.5)."""
+    weight = (q ** sharpen) / q.sum(dim=0, keepdim=True).clamp_min(1e-8)
     p = weight / weight.sum(dim=1, keepdim=True).clamp_min(1e-8)
     return p
 
@@ -218,6 +218,7 @@ class SharedAndSpecificLoss(nn.Module):
         lambda_ctr=0.5,
         lambda_vic=0.1,
         warm_up=False,
+        sharpen=2.5,
     ):
         super().__init__()
         self.lambda_dec = lambda_dec
@@ -228,6 +229,7 @@ class SharedAndSpecificLoss(nn.Module):
         self.lambda_ctr = lambda_ctr
         self.lambda_vic = lambda_vic
         self.warm_up = warm_up  # if True: only ctr (+ optional res), no DEC/agree/leak
+        self.sharpen = sharpen
 
     @staticmethod
     def contrastive_loss(shared_1, shared_2, temperature, batch_size):
@@ -278,7 +280,7 @@ class SharedAndSpecificLoss(nn.Module):
         l_leak = out['q'][1].new_zeros(())
         if not self.warm_up:
             for a in (1, 2, 3):
-                p = target_distribution(out['q'][a].detach())
+                p = target_distribution(out['q'][a].detach(), sharpen=self.sharpen)
                 l_dec = l_dec + kl_div_pq(p, out['q'][a])
             l_agree = (
                 symmetric_kl(out['q'][1], out['q'][2])

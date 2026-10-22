@@ -44,7 +44,7 @@ def train(
     model.train()
     total_loss = 0.0
     total = 0.0
-    keys = ('l_spec', 'l_res', 'l_ctr', 'l_vic', 'l_view', 'l_leak', 'val_score')
+    keys = ('l_spec', 'l_res', 'l_srec', 'l_ctr', 'l_vic', 'l_view', 'l_leak', 'val_score')
     sum_terms = {k: 0.0 for k in keys}
 
     for batch_x, batch_u, batch_y in train_loader:
@@ -68,7 +68,7 @@ def train(
 
     res = total_loss / total
     print(
-        '\n [Epoch: %3d/%3d] Train Loss: %f | spec=%.4f res=%.4f ctr=%.4f '
+        '\n [Epoch: %3d/%3d] Train Loss: %f | spec=%.4f res=%.4f srec=%.4f ctr=%.4f '
         'vic=%.4f view=%.4f leak=%.4f'
         % (
             epoch + 1,
@@ -76,6 +76,7 @@ def train(
             res,
             sum_terms['l_spec'] / total,
             sum_terms['l_res'] / total,
+            sum_terms['l_srec'] / total,
             sum_terms['l_ctr'] / total,
             sum_terms['l_vic'] / total,
             sum_terms['l_view'] / total,
@@ -100,7 +101,7 @@ def validation(
     model.eval()
     total_loss = 0.0
     total = 0.0
-    keys = ('l_spec', 'l_res', 'l_ctr', 'l_vic', 'l_view', 'l_leak', 'val_score')
+    keys = ('l_spec', 'l_res', 'l_srec', 'l_ctr', 'l_vic', 'l_view', 'l_leak', 'val_score')
     sum_terms = {k: 0.0 for k in keys}
 
     with torch.no_grad():
@@ -121,7 +122,7 @@ def validation(
     # Checkpoint on constructive val_score (excludes leak)
     res = avg_terms['val_score']
     print(
-        '[Epoch: %3d/%3d] Val score: %f | spec=%.4f res=%.4f ctr=%.4f '
+        '[Epoch: %3d/%3d] Val score: %f | spec=%.4f res=%.4f srec=%.4f ctr=%.4f '
         'vic=%.4f view=%.4f leak=%.4f'
         % (
             epoch + 1,
@@ -129,6 +130,7 @@ def validation(
             res,
             avg_terms['l_spec'],
             avg_terms['l_res'],
+            avg_terms['l_srec'],
             avg_terms['l_ctr'],
             avg_terms['l_vic'],
             avg_terms['l_view'],

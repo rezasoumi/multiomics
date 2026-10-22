@@ -14,6 +14,13 @@ from multiomics.code.method3_spectral_graph.graph_spectral import (
     targets_paths,
     nmi_on_spectral_U,
 )
+
+
+def _infer_spectral_dim(state_dict, default=SPECTRAL_DIM):
+    w = state_dict.get('f_spec.2.weight')
+    if w is not None:
+        return int(w.shape[0])
+    return default
 from multiomics.code.shared_rep_metrics import (
     evaluate_shared_and_integration,
     print_metrics_report,
@@ -22,7 +29,7 @@ from multiomics.code.shared_rep_metrics import (
 warnings.filterwarnings('ignore')
 
 NUM_CLUST = {'lihc': 2, 'coad': 4, 'kirc': 2, 'brca': 5}
-SPECTRAL_DIM = 16
+SPECTRAL_DIM = 24  # v2 default; overridden from checkpoint f_spec if needed
 
 
 def setup_seed(seed):
@@ -57,18 +64,20 @@ def evaluate_config(disease, config_dir, plot=False):
         allow_pickle=True,
     )
 
+    state = torch.load(
+        os.path.join(config_dir, 'model_{}'.format(disease)), map_location='cpu'
+    )
+    spectral_dim = _infer_spectral_dim(state)
     model = SharedAndSpecificEmbedding(
         view_size=[view1_data.shape[1], view2_data.shape[1], view3_data.shape[1]],
         n_units_1=[512, 256, 128, 32],
         n_units_2=[512, 256, 128, 32],
         n_units_3=[256, 128, 64, 32],
         mlp_size=[32, 8],
-        spectral_dim=SPECTRAL_DIM,
+        spectral_dim=spectral_dim,
         n_clusters=num_clust,
     )
-    model.load_state_dict(
-        torch.load(os.path.join(config_dir, 'model_{}'.format(disease)), map_location='cpu')
-    )
+    model.load_state_dict(state)
     model.eval()
     setup_seed(2)
 
@@ -90,19 +99,21 @@ def evaluate_config(disease, config_dir, plot=False):
     )
 
     # Spectral ceiling (full-cohort U), if available
-    paths = targets_paths(disease)
-    if os.path.exists(paths['U']):
-        U = np.load(paths['U'])
-        # Full-cohort labels for ceiling (same order as load_data)
-        _, _, _, _, y_all = load_data(disease)
-        truth_all = _truth_from_label(disease, y_all)
-        try:
-            metrics['nmi_spectral_U'] = nmi_on_spectral_U(U, truth_all, num_clust)
-        except Exception as exc:
-            print('Warning: nmi_spectral_U failed:', exc)
-            metrics['nmi_spectral_U'] = float('nan')
-    else:
-        metrics['nmi_spectral_U'] = float('nan')
+    metrics['nmi_spectral_U'] = float('nan')
+    parent = targets_paths(disease, tag='v2')['parent']
+    for u_path in (
+        os.path.join(parent, '{}_v2_U.npy'.format(disease)),
+        os.path.join(parent, '{}_U.npy'.format(disease)),
+    ):
+        if os.path.exists(u_path):
+            U = np.load(u_path)
+            _, _, _, _, y_all = load_data(disease)
+            truth_all = _truth_from_label(disease, y_all)
+            try:
+                metrics['nmi_spectral_U'] = nmi_on_spectral_U(U, truth_all, num_clust)
+            except Exception as exc:
+                print('Warning: nmi_spectral_U failed:', exc)
+            break
 
     if plot:
         util.plot_with_path(
@@ -117,7 +128,9 @@ def evaluate_config(disease, config_dir, plot=False):
 
 def main(args):
     disease = args.disease
-    parent = '../../results/models_{}_method3'.format(disease)
+    parent = '../../results/models_{}_method3_v2'.format(disease)
+    if not os.path.isdir(parent):
+        parent = '../../results/models_{}_method3'.format(disease)
 
     if args.config:
         folder = args.config

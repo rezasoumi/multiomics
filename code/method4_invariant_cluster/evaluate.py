@@ -114,7 +114,9 @@ def evaluate_config(disease, config_dir, plot=False):
 
 def main(args):
     disease = args.disease
-    parent = '../../results/models_{}_method4'.format(disease)
+    parent = '../../results/models_{}_method4_v2'.format(disease)
+    if not os.path.isdir(parent):
+        parent = '../../results/models_{}_method4'.format(disease)
 
     if args.config:
         folder = args.config
