@@ -60,12 +60,13 @@ def plot_nmi_bars(out_dir):
         labels = [r['short'] for r in rows]
         x = np.arange(len(labels))
         width = 0.25
-        fig, ax = plt.subplots(figsize=(9.5, 4.2))
+        fig_w = max(9.5, 1.55 * len(labels) + 2.5)
+        fig, ax = plt.subplots(figsize=(fig_w, 4.2))
         ax.bar(x - width, [r['s_nmi'] for r in rows], width, label='mean(S)', color=COLOR_S)
         ax.bar(x, [r['p_nmi'] for r in rows], width, label='concat(P)', color=COLOR_P)
         ax.bar(x + width, [r['ps_nmi'] for r in rows], width, label='concat(P,S)', color=COLOR_PS)
         ax.set_xticks(x)
-        ax.set_xticklabels(labels, rotation=15, ha='right')
+        ax.set_xticklabels(labels, rotation=20, ha='right')
         ax.set_ylabel('NMI')
         ax.set_ylim(0, max(0.55, max(r['ps_nmi'] for r in rows) + 0.08))
         ax.set_title('Shared / private clustering NMI — {}'.format(title))
@@ -222,46 +223,56 @@ def _arrow(ax, p0, p1, color='#444444'):
 
 def plot_schematic(out_dir):
     apply_style()
-    fig, ax = plt.subplots(figsize=(11, 5.2))
-    ax.set_xlim(0, 11)
-    ax.set_ylim(0, 5.2)
+    fig, ax = plt.subplots(figsize=(12.5, 6.0))
+    ax.set_xlim(0, 12.5)
+    ax.set_ylim(0, 6.0)
     ax.axis('off')
     ax.set_title('Shared / private process (visual color code)', pad=12)
 
     # Inputs
-    _box(ax, (0.3, 3.6), 1.6, 0.7, 'X₁ (omics 1)', '#F0F0F0')
-    _box(ax, (0.3, 2.4), 1.6, 0.7, 'X₂ (omics 2)', '#F0F0F0')
-    _box(ax, (0.3, 1.2), 1.6, 0.7, 'X₃ (omics 3)', '#F0F0F0')
+    _box(ax, (0.3, 4.2), 1.6, 0.7, 'X₁ (omics 1)', '#F0F0F0')
+    _box(ax, (0.3, 3.0), 1.6, 0.7, 'X₂ (omics 2)', '#F0F0F0')
+    _box(ax, (0.3, 1.8), 1.6, 0.7, 'X₃ (omics 3)', '#F0F0F0')
 
     # Encoders
-    _box(ax, (2.4, 2.2), 1.5, 1.2, 'Encoders\nE_m', '#E8E8E8', fontsize=8)
+    _box(ax, (2.4, 2.6), 1.5, 1.2, 'Encoders\nE_m', '#E8E8E8', fontsize=8)
 
     # Latents
-    _box(ax, (4.6, 3.5), 1.7, 0.85, 'S_m  shared', COLOR_S)
-    _box(ax, (4.6, 1.3), 1.7, 0.85, 'P_m  private', COLOR_P)
+    _box(ax, (4.6, 4.0), 1.7, 0.85, 'S_m  shared', COLOR_S)
+    _box(ax, (4.6, 1.8), 1.7, 0.85, 'P_m  private', COLOR_P)
 
-    # Downstream
-    _box(ax, (7.2, 3.9), 1.8, 0.7, 'Contrastive\non S', '#BDD7E7')
-    _box(ax, (7.2, 2.85), 1.8, 0.7, 'Recon / f,g,k,b\nor joint D([P;S])', '#FEE6CE', fontsize=7.5)
-    _box(ax, (7.2, 1.7), 1.8, 0.7, 'VICReg / ortho\nP ⊥ S', '#FDD0A2', fontsize=8)
-    _box(ax, (7.2, 0.55), 1.8, 0.7, 'Eval: KMeans\non mean(S), P, [P;S]', COLOR_PS, fontsize=7.5)
+    # Downstream (shared-side objectives)
+    _box(ax, (7.1, 5.0), 2.0, 0.65, 'Contrastive on S\n(M1/M2/OMI)', '#BDD7E7', fontsize=7.5)
+    _box(ax, (7.1, 4.15), 2.0, 0.65, 'M3: L_spec → fused\nLaplacian U', '#C7E9C0', fontsize=7.5)
+    _box(ax, (7.1, 3.3), 2.0, 0.65, 'M4: DEC + agree\non soft clusters', '#A1D99B', fontsize=7.5)
+    _box(ax, (7.1, 2.45), 2.0, 0.65, 'Recon / f,g,k,b\nor residual D', '#FEE6CE', fontsize=7.5)
+    _box(ax, (7.1, 1.6), 2.0, 0.65, 'VICReg / ortho /\nview-ID + leak GRL', '#FDD0A2', fontsize=7.5)
+    _box(ax, (7.1, 0.7), 2.0, 0.65, 'Eval: KMeans on\nmean(S), P, [P;S]', COLOR_PS, fontsize=7.5)
 
-    _arrow(ax, (1.9, 3.95), (2.4, 3.1))
-    _arrow(ax, (1.9, 2.75), (2.4, 2.8))
-    _arrow(ax, (1.9, 1.55), (2.4, 2.5))
-    _arrow(ax, (3.9, 3.0), (4.6, 3.85), COLOR_S)
-    _arrow(ax, (3.9, 2.5), (4.6, 1.8), COLOR_P)
-    _arrow(ax, (6.3, 3.95), (7.2, 4.25), COLOR_S)
-    _arrow(ax, (6.3, 3.7), (7.2, 3.2), COLOR_S)
-    _arrow(ax, (6.3, 1.7), (7.2, 3.0), COLOR_P)
-    _arrow(ax, (6.3, 1.5), (7.2, 2.05), COLOR_P)
-    _arrow(ax, (6.3, 3.9), (7.2, 1.0), COLOR_PS)
+    # Method callouts
+    _box(ax, (9.6, 4.15), 2.5, 0.65, 'M3 shared = spectral\ngraph geometry', '#E5F5E0', fontsize=7.5)
+    _box(ax, (9.6, 3.3), 2.5, 0.65, 'M4 shared = invariant\ncross-omics clustering', '#E5F5E0', fontsize=7.5)
+    _box(ax, (9.6, 1.6), 2.5, 0.65, 'M3/M4 private =\nresidual + view − leak', '#FFF5EB', fontsize=7.5)
+
+    _arrow(ax, (1.9, 4.55), (2.4, 3.5))
+    _arrow(ax, (1.9, 3.35), (2.4, 3.2))
+    _arrow(ax, (1.9, 2.15), (2.4, 2.9))
+    _arrow(ax, (3.9, 3.4), (4.6, 4.35), COLOR_S)
+    _arrow(ax, (3.9, 2.9), (4.6, 2.3), COLOR_P)
+    _arrow(ax, (6.3, 4.45), (7.1, 5.3), COLOR_S)
+    _arrow(ax, (6.3, 4.4), (7.1, 4.45), COLOR_S)
+    _arrow(ax, (6.3, 4.3), (7.1, 3.6), COLOR_S)
+    _arrow(ax, (6.3, 4.1), (7.1, 2.75), COLOR_S)
+    _arrow(ax, (6.3, 2.2), (7.1, 2.75), COLOR_P)
+    _arrow(ax, (6.3, 2.1), (7.1, 1.9), COLOR_P)
+    _arrow(ax, (6.3, 4.3), (7.1, 1.0), COLOR_PS)
 
     ax.text(
         0.3,
-        0.25,
+        0.2,
         'Blue = shared S · Orange = private P · Purple = fused eval · '
-        'Method 1 adds f/g/k/b; VICReg/Method2 add P⊥S; OMIDIENT puts Dirichlet on P.',
+        'M1: f/g/k/b · M2: joint recon + VICReg · M3: spectral U · M4: DEC/agree · '
+        'OMIDIENT: Dirichlet on P.',
         fontsize=8,
         color='#444444',
     )

@@ -47,6 +47,8 @@ METHOD_DIRS = {
     'method1_vicreg': 'models_{}_method1_vicreg',
     'method2': 'models_{}_method2',
     'method2_omidient': 'models_{}_method2_omidient',
+    'method3': 'models_{}_method3',
+    'method4': 'models_{}_method4',
     'mocss': 'models_{}_ae',
     'omidient': 'models_{}_ProdGammaDirVae',
 }
@@ -213,6 +215,30 @@ def load_latents(method, disease, config_dir):
 
         folder = os.path.basename(config_dir.rstrip('/'))
         model = build_model(view_size, parse_k_from_config(folder))
+    elif method == 'method3':
+        from multiomics.code.method3_spectral_graph.evaluate import SPECTRAL_DIM
+        from multiomics.code.method3_spectral_graph.model import SharedAndSpecificEmbedding
+
+        model = SharedAndSpecificEmbedding(
+            view_size=view_size,
+            n_units_1=[512, 256, 128, 32],
+            n_units_2=[512, 256, 128, 32],
+            n_units_3=[256, 128, 64, 32],
+            mlp_size=[32, 8],
+            spectral_dim=SPECTRAL_DIM,
+            n_clusters=NUM_CLUST[disease],
+        )
+    elif method == 'method4':
+        from multiomics.code.method4_invariant_cluster.model import SharedAndSpecificEmbedding
+
+        model = SharedAndSpecificEmbedding(
+            view_size=view_size,
+            n_units_1=[512, 256, 128, 32],
+            n_units_2=[512, 256, 128, 32],
+            n_units_3=[256, 128, 64, 32],
+            mlp_size=[32, 8],
+            n_clusters=NUM_CLUST[disease],
+        )
     else:
         from multiomics.code.method2_joint_vicreg.model import SharedAndSpecificEmbedding
 
@@ -447,6 +473,8 @@ if __name__ == '__main__':
             'method1_vicreg',
             'method2',
             'method2_omidient',
+            'method3',
+            'method4',
             'mocss',
             'omidient',
         ],

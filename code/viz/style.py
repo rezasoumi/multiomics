@@ -23,6 +23,8 @@ METHOD_MARKERS = {
     'M1 + b_m': 's',
     'VICReg + b_m': 'D',
     'M2 (AE)': '^',
+    'M3 spectral': '*',
+    'M4 invariant': 'h',
     'M2 + OMIDIENT P': 'v',
     'OMIDIENT (no ortho)': 'P',
     'OMIDIENT (+ortho)': 'X',

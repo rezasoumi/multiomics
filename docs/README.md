@@ -78,8 +78,8 @@ Code: `code/viz/` (`run_all.py`, `plots.py`). Fig 5 reuses `code/diagnose_shared
 
 Generate on Triton with `sbatch run_viz.slurm` (needs checkpoints / leaderboard CSVs under `results/`). After that, this section will show:
 
-- `figures/05_embedding_umap.png` (or `05_embedding_tsne.png`)
-- `figures/06_sweep_method1.png`, `06_sweep_method1_vicreg.png`, `06_sweep_method2.png`, `06_sweep_method2_omidient.png`, `06_sweep_omidient_ortho.png`
+- `figures/05_embedding_umap.png` (or `05_embedding_tsne.png`) — includes Method 3 / Method 4 winners
+- `figures/06_sweep_method1.png`, `06_sweep_method1_vicreg.png`, `06_sweep_method2.png`, `06_sweep_method3.png`, `06_sweep_method4.png`, `06_sweep_method2_omidient.png`, `06_sweep_omidient_ortho.png`
 
 ---
 
