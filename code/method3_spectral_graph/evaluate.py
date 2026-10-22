@@ -33,6 +33,8 @@ def setup_seed(seed):
 
 
 def _truth_from_label(disease, label):
+    # load_data('brca') returns a pandas DataFrame; npy loads return ndarray
+    label = np.asarray(label)
     if disease == 'coad':
         return label.flatten().astype('int')
     if disease == 'lihc':
