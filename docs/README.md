@@ -228,7 +228,9 @@ Alignment: cosine = −0.0120 ± 0.0690 | CCA = 0.9772 ± 0.0026 | CKA = 0.7703 
 
 ## Method 3 (spectral / graph shared) — v1 sweep
 
-Package: `code/method3_spectral_graph/`. Design: [`adr-clustering-aligned-shared.md`](./adr-clustering-aligned-shared.md). Shared target = fused multi-omics Laplacian embedding \(U\); private = residual recon + view-ID + GRL leak. Rank: `eval_loss = L_spec + L_res + L_ctr`. Spectral ceiling on this run: `nmi_spectral_U = 0.3873`.
+Package: `code/method3_spectral_graph/` (default code = **v1**; reproduces this table via `sbatch run_method3.slurm`). Design: [`adr-clustering-aligned-shared.md`](./adr-clustering-aligned-shared.md). Shared target = fused multi-omics Laplacian embedding \(U\); private = residual recon + view-ID + GRL leak. Rank: `eval_loss = L_spec + L_res + L_ctr`. Spectral ceiling on this run: `nmi_spectral_U = 0.3873`.
+
+> **v2 ablation (not default):** stronger leak / true residual / λ_ctr floor / graph search did **not** raise `nmi_spectral_U` and lost Δ X R² (+0.26 → −0.05). Kept only as a negative result under `results/models_brca_method3_v2/` if present; do not use for re-runs.
 
 ### Top 10 by eval_loss
 
@@ -264,7 +266,9 @@ Alignment: cosine = −0.0441 | CCA = 0.9580 | CKA = 0.5359
 
 ## Method 4 (invariant DEC cluster) — v1 sweep
 
-Package: `code/method4_invariant_cluster/`. Shared = DEC + cross-view soft-label agreement; private = residual + view-ID + GRL leak. Rank: `eval_loss = L_dec + L_agree + L_res + L_ctr`.
+Package: `code/method4_invariant_cluster/` (default code = **v1**; reproduces this table via `sbatch run_method4.slurm`). Shared = DEC + cross-view soft-label agreement; private = residual + view-ID + GRL leak. Rank: `eval_loss = L_dec + L_agree + L_res + L_ctr`.
+
+> **v2 ablation (not default):** sharper DEC / stronger leak did not improve NMI (concat ~0.35). Optional artifacts under `results/models_brca_method4_v2/` only.
 
 ### Top 10 by eval_loss
 

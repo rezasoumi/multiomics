@@ -1,13 +1,11 @@
-"""Hyperparameter sweep for Method 3 v2 (spectral + true residual private).
+"""Hyperparameter sweep for Method 3 (spectral shared + residual private hybrid).
 
-v2 changes vs v1:
-  - better graph (consensus / auto eigengap select) → results/.../spectral_targets/*_v2_*
-  - true residual: private_dec(P) ≈ X − sg(shared_dec(S)); light λ_srec on shared recon
-  - λ_ctr floor ≥ 0.3; weaker λ_res; stronger λ_leak
-  - results under models_{disease}_method3_v2/
+Checkpoint / early-stop: val_score = λ_spec L_spec + λ_res L_res + λ_ctr L_ctr
+                         + λ_vic L_vic + λ_view L_view  (excludes L_leak)
 
-Checkpoint: val_score (excludes L_leak)
-Rank: eval_loss = L_spec + L_res + L_ctr
+Rank across configs:
+  eval_loss = L_spec + L_res + L_ctr
+(L_vic / L_view / L_leak excluded from ranking).
 """
 
 import os
@@ -29,7 +27,7 @@ from multiomics.code.method3_spectral_graph.model import (
     SharedAndSpecificLoss,
 )
 from multiomics.code.method3_spectral_graph.training import train, validation, EarlyStopper
-from multiomics.code.method3_spectral_graph.evaluate import evaluate_config
+from multiomics.code.method3_spectral_graph.evaluate import evaluate_config, SPECTRAL_DIM
 from multiomics.code.method3_spectral_graph.graph_spectral import (
     compute_and_save_targets,
     nmi_on_spectral_U,
@@ -45,27 +43,25 @@ USE_GPU = torch.cuda.is_available()
 SEED = 21
 TEMPERATURE = 0.4
 NUM_CLUST = {'lihc': 2, 'coad': 4, 'kirc': 2, 'brca': 5}[disease]
-# Defaults; overwritten from spectral meta after auto-select
-K_NN = 25
-D_PCA = 100
-R_SPEC = 24
-LAMBDA_SREC_FIXED = 0.3
+K_NN = 15
+D_PCA = 50
+R_SPEC = SPECTRAL_DIM
 
 LR = {'brca': 0.0004, 'kirc': 0.0002, 'coad': 0.0002, 'lihc': 0.0002}[disease]
 WEIGHT_DECAY = {'brca': 0.0007, 'kirc': 0.0007, 'coad': 0.0007, 'lihc': 0.0007}[disease]
 
-# v2 coarse: 4 x 3 x 3 = 36 with fixed vic/view; stronger leak, weaker res, ctr floored
+# Coarse: 4 x 3 x 3 = 36 with fixed vic/view/leak
 LAMBDA_SPEC_GRID = [0.5, 1.0, 1.5, 2.0]
-LAMBDA_RES_GRID = [0.1, 0.3, 0.5]
-LAMBDA_CTR_GRID = [0.3, 0.5, 1.0]  # no zero — keep alignment
+LAMBDA_RES_GRID = [0.3, 0.5, 1.0]
+LAMBDA_CTR_GRID = [0.0, 0.3, 0.5]
 LAMBDA_VIC_FIXED = 0.1
 LAMBDA_VIEW_FIXED = 0.5
-LAMBDA_LEAK_FIXED = 2.0
+LAMBDA_LEAK_FIXED = 0.5
 
 # Full optional extras
 LAMBDA_VIC_GRID = [0.0, 0.1, 0.5]
 LAMBDA_VIEW_GRID = [0.3, 0.5, 1.0]
-LAMBDA_LEAK_GRID = [1.0, 2.0, 3.0]
+LAMBDA_LEAK_GRID = [0.0, 0.5, 1.0]
 
 MINIMIZE_METRICS = frozenset({'eval_loss', 'val_loss'})
 DEFAULT_RANK_METRIC = 'eval_loss'
@@ -101,14 +97,13 @@ def setup_seed(seed):
 
 
 def config_name(lr, wd, lambda_spec, lambda_res, lambda_ctr, lambda_vic, lambda_view, lambda_leak):
-    return '{}_{}_s{}_r{}_c{}_v{}_vw{}_lk{}_sr{}'.format(
-        lr, wd, lambda_spec, lambda_res, lambda_ctr, lambda_vic, lambda_view, lambda_leak,
-        LAMBDA_SREC_FIXED,
+    return '{}_{}_s{}_r{}_c{}_v{}_vw{}_lk{}'.format(
+        lr, wd, lambda_spec, lambda_res, lambda_ctr, lambda_vic, lambda_view, lambda_leak
     )
 
 
 def results_parent():
-    return '../../results/models_{}_method3_v2'.format(disease)
+    return '../../results/models_{}_method3'.format(disease)
 
 
 def leaderboard_path():
@@ -267,13 +262,12 @@ def train_one(
         lambda_vic=lambda_vic,
         lambda_view=lambda_view,
         lambda_leak=lambda_leak,
-        lambda_srec=LAMBDA_SREC_FIXED,
     )
 
     history_path = os.path.join(path, 'epoch_history.csv')
     hist_fields = [
         'epoch', 'train_loss', 'val_loss',
-        'val_spec', 'val_res', 'val_srec', 'val_ctr', 'val_vic', 'val_view', 'val_leak', 'eval_loss',
+        'val_spec', 'val_res', 'val_ctr', 'val_vic', 'val_view', 'val_leak', 'eval_loss',
     ]
     with open(history_path, 'w', newline='') as f:
         csv.DictWriter(f, fieldnames=hist_fields).writeheader()
@@ -299,7 +293,6 @@ def train_one(
                 'val_loss': val_loss,
                 'val_spec': avg_terms['l_spec'],
                 'val_res': avg_terms['l_res'],
-                'val_srec': avg_terms['l_srec'],
                 'val_ctr': avg_terms['l_ctr'],
                 'val_vic': avg_terms['l_vic'],
                 'val_view': avg_terms['l_view'],
@@ -362,25 +355,15 @@ def run_sweep(args):
     batch, epochs = args.batch_size, args.epochs
     lr, wd = LR, WEIGHT_DECAY
 
-    global R_SPEC
     view1_data, view2_data, view3_data, _, y_true = load_data(disease)
-    from multiomics.code.method3_spectral_graph.evaluate import _truth_from_label
-    truth_all = _truth_from_label(disease, y_true)
     U_all, cluster_all, meta = compute_and_save_targets(
         disease, view1_data, view2_data, view3_data,
         n_clusters=NUM_CLUST, k_nn=K_NN, d_pca=D_PCA, r=R_SPEC,
         force=args.recompute_spectral,
-        auto_select=True,
-        truth_for_log=truth_all,
-        tag='v2',
     )
-    R_SPEC = int(meta.get('r', U_all.shape[1]))
-    nmi_u = meta.get('nmi_spectral_U')
-    if nmi_u is None:
-        nmi_u = nmi_on_spectral_U(U_all, truth_all, NUM_CLUST)
-    print('Spectral ceiling nmi_spectral_U = {:.4f} | r={} | meta keys={}'.format(
-        float(nmi_u), R_SPEC, list(meta.keys())
-    ))
+    from multiomics.code.method3_spectral_graph.evaluate import _truth_from_label
+    nmi_u = nmi_on_spectral_U(U_all, _truth_from_label(disease, y_true), NUM_CLUST)
+    print('Spectral ceiling nmi_spectral_U = {:.4f} | meta={}'.format(nmi_u, meta))
 
     grid = build_grid(args.grid_search)
     total = len(grid)
