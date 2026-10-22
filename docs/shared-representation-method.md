@@ -4,14 +4,18 @@
 
 This document summarizes the limitations of the current OMIDIENT/MOCSS shared-representation pipeline in this repository, and compares the implemented extensions for the thesis goal of learning **truly shared** latent codes across multi-omics modalities.
 
+**Related:** clustering-aligned Methods 3–4 (spectral / invariant) — see [`adr-clustering-aligned-shared.md`](./adr-clustering-aligned-shared.md).
+
 **Code locations:**
 
 
-| Method                                        | Package                         |
-| --------------------------------------------- | ------------------------------- |
-| Method 1 (full predictability)                | `code/method1_predictability/`  |
-| Method 1 ablation (no `k` / `L_own` + VICReg) | `code/method1_vicreg_ablation/` |
-| Method 2 (joint recon + VICReg)               | `code/method2_joint_vicreg/`    |
+| Method                                        | Package                            |
+| --------------------------------------------- | ---------------------------------- |
+| Method 1 (full predictability)                | `code/method1_predictability/`     |
+| Method 1 ablation (no `k` / `L_own` + VICReg) | `code/method1_vicreg_ablation/`    |
+| Method 2 (joint recon + VICReg)               | `code/method2_joint_vicreg/`       |
+| Method 3 (spectral / graph + hybrid private)  | `code/method3_spectral_graph/`     |
+| Method 4 (invariant DEC cluster)              | `code/method4_invariant_cluster/`  |
 
 
 **Context:** OMIDIENT (Negar et al.) improves multi-omics integration by incorporating Dirichlet distributions into the **private/specific** reconstruction networks. The **shared** branch still follows MOCSS. This thesis aims to extend OMIDIENT by improving the shared representation learning component—potentially via Dirichlet-based VAEs or other methods.
