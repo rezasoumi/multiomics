@@ -14,13 +14,6 @@ from multiomics.code.method3_spectral_graph.graph_spectral import (
     targets_paths,
     nmi_on_spectral_U,
 )
-
-
-def _infer_spectral_dim(state_dict, default=SPECTRAL_DIM):
-    w = state_dict.get('f_spec.2.weight')
-    if w is not None:
-        return int(w.shape[0])
-    return default
 from multiomics.code.shared_rep_metrics import (
     evaluate_shared_and_integration,
     print_metrics_report,
@@ -30,6 +23,13 @@ warnings.filterwarnings('ignore')
 
 NUM_CLUST = {'lihc': 2, 'coad': 4, 'kirc': 2, 'brca': 5}
 SPECTRAL_DIM = 24  # v2 default; overridden from checkpoint f_spec if needed
+
+
+def _infer_spectral_dim(state_dict, default=SPECTRAL_DIM):
+    w = state_dict.get('f_spec.2.weight')
+    if w is not None:
+        return int(w.shape[0])
+    return default
 
 
 def setup_seed(seed):
