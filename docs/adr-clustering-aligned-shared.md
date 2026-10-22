@@ -2,7 +2,7 @@
 
 > **Status:** Accepted for implementation (design freeze for v1)  
 > **Date:** 2026-10-22  
-> **Related:** [`shared-representation-method.md`](./shared-representation-method.md), [`README.md`](./README.md)  
+> **Related:** [`shared-representation-method.md`](./shared-representation-method.md), [`README.md`](./README.md), single-\(Z\) clustering track: [`adr-single-z-clustering.md`](./adr-single-z-clustering.md)  
 > **Note on math:** plain text so it renders in any Markdown preview.
 
 This ADR records the decision to add two **clustering-aligned** methods that replace (or demote) feature reconstruction as the definition of shared codes. It is the implementation contract for:

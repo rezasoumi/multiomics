@@ -434,6 +434,73 @@ See **Compact comparison** (AE private), **Method 3 / 4** sections, and **Method
 
 ---
 
+## Single-\(Z\) clustering track (no \(S\)/\(P\))
+
+Separate from Methods 1–4. Goal: maximize BRCA subtype NMI with one patient embedding \(Z\) (beat / contextualize OMIDIENT no-ortho ~0.50). Design: [`adr-single-z-clustering.md`](./adr-single-z-clustering.md).
+
+| ID | Package | Role | Results dir |
+| -- | ------- | ---- | ----------- |
+| **A** | `code/cluster_a_contrastive_dec/` | Contrastive + DEC on \(Z=\mathrm{mean}(h_m)\) | `results/models_brca_cluster_a/` |
+| **D** | `code/cluster_d_consensus/` | Consensus co-association baseline (CPU) | `results/models_brca_cluster_d/` |
+| **B** | `code/cluster_b_scan/` | SCAN fine-tune on A’s checkpoint | `results/models_brca_cluster_b/` |
+| **C** | `code/cluster_c_gnn/` | Pure-PyTorch GCN + DEC (gated) | `results/models_brca_cluster_c/` |
+
+**Ranking:** A/C by label-free `eval_loss` (A: \(L_\mathrm{ctr}+L_\mathrm{dec}\); C: val DEC KL). D/B may report NMI for analysis; fill the comparison table after Triton runs.
+
+| Method | Config | NMI (KMeans on \(Z\) / assign) | Notes |
+| ------ | ------ | ---: | ----- |
+| OMIDIENT no-ortho (bar) | `0.0003_0.0005_4` | ~0.50 (mean(S) ≈ concat) | free lunch; no true \(S\)/\(P\) |
+| Cluster D (headline) | *TBD* | — | full-cohort consensus |
+| Cluster A (eval_loss) | *TBD* | — | test split |
+| Cluster B (best NMI) | *TBD* | — | needs A |
+| Cluster C (eval_loss) | *TBD* | — | gated |
+
+### Run on Triton
+
+```bash
+cd /scratch/work/soumir1/githubmultiomics/multiomics
+git pull   # after pushing this branch
+
+# 1) Consensus baseline (CPU, ~minutes) — can run in parallel with A
+sbatch run_cluster_d.slurm
+
+# 2) Primary neural method (A100, ~48 configs)
+sbatch run_cluster_a.slurm
+
+# 3) After A finishes (needs results/models_brca_cluster_a/best_config.json)
+sbatch run_cluster_b.slurm
+# optional: pin parent A config
+# sbatch --export=ALL,PARENT_CONFIG=0.0004_0.0007_c1.0_d1.0_r0.0 run_cluster_b.slurm
+
+# 4) Only if A is below D and/or clearly below ~0.50 after B
+sbatch run_cluster_c.slurm
+```
+
+**Interactive / debug** (same `PYTHONPATH` as other jobs):
+
+```bash
+export PYTHONPATH=/scratch/work/soumir1/githubmultiomics:/scratch/work/soumir1
+source /scratch/work/soumir1/multiomics/venv/bin/activate
+cd /scratch/work/soumir1/githubmultiomics/multiomics
+
+# D
+cd code/cluster_d_consensus && python -u run_baseline.py --disease brca --grid
+
+# A
+cd ../cluster_a_contrastive_dec && python -u hyperparam_tuning.py --epochs 100 --resume
+
+# B (after A)
+cd ../cluster_b_scan && python -u hyperparam_tuning.py --epochs 50 --resume
+
+# C (gated)
+cd ../cluster_c_gnn && python -u hyperparam_tuning.py --epochs 200 --resume
+# quick smoke: add --quick
+```
+
+Artifacts: `leaderboard.csv` + `best_config.json` under each `results/models_brca_cluster_{a,b,c,d}/`.
+
+---
+
 ## Appendix: Method 1 / VICReg without `b_m` (pre–private-sufficiency)
 
 Earlier sweeps **before** adding `b_m(P_m) → X_m`. Rank was `eval_loss = L_std + L_shared + L_ctr` (no `L_priv`). Kept for comparison with the `+b_m` tables above; not used in the compact panel.
