@@ -43,10 +43,23 @@ USE_GPU = torch.cuda.is_available()
 SEED = 21
 TEMPERATURE = 0.4
 
-# Fixed optimizer settings (MOCSS brca defaults)
-LR = {'brca': 0.0004, 'kirc': 0.0002, 'coad': 0.0002, 'lihc': 0.0002}[disease]
-WEIGHT_DECAY = {'brca': 0.0007, 'kirc': 0.0007, 'coad': 0.0007, 'lihc': 0.0007}[disease]
+# Fixed optimizer settings (MOCSS disease defaults)
+LR_BY_DISEASE = {'brca': 0.0004, 'kirc': 0.0002, 'coad': 0.0002, 'lihc': 0.0002}
+WEIGHT_DECAY_BY_DISEASE = {'brca': 0.0007, 'kirc': 0.0007, 'coad': 0.0007, 'lihc': 0.0007}
+LR = LR_BY_DISEASE[disease]
+WEIGHT_DECAY = WEIGHT_DECAY_BY_DISEASE[disease]
 LAMBDA_CTR = 1.0
+SUPPORTED_DISEASES = tuple(LR_BY_DISEASE.keys())
+
+
+def configure_disease(name):
+    """Set module-level disease and optimizer defaults (call before sweep)."""
+    global disease, LR, WEIGHT_DECAY
+    if name not in LR_BY_DISEASE:
+        raise ValueError('Unknown disease {!r}; expected one of {}'.format(name, SUPPORTED_DISEASES))
+    disease = name
+    LR = LR_BY_DISEASE[disease]
+    WEIGHT_DECAY = WEIGHT_DECAY_BY_DISEASE[disease]
 
 # 5 x 5 x 5 x 4 = 500 predictability-weight configs
 ALPHA_GRID = [0.3, 0.5, 0.7, 1.0, 1.5]
@@ -548,6 +561,7 @@ def run_sweep(args):
 
 
 def main(args):
+    configure_disease(args.disease)
     if args.summarize_only:
         summarize_best(metric=args.rank_metric)
         return
@@ -556,6 +570,13 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Method 1 predictability-weight sweep')
+    parser.add_argument(
+        '--disease',
+        type=str,
+        default=disease,
+        choices=SUPPORTED_DISEASES,
+        help='Dataset key (results under results/models_{disease}_method1/)',
+    )
     parser.add_argument('--epochs', type=int, default=EPOCHS)
     parser.add_argument('--batch-size', type=int, default=BATCH_SIZE)
     parser.add_argument(

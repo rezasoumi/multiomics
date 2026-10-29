@@ -1,0 +1,10 @@
+# Large KIRC omics (install via setup_kirc_data.sh from data.zip)
+data.zip
+data/KIRC/data/
+__MACOSX/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.DS_Store

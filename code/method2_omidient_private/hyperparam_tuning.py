@@ -44,8 +44,21 @@ K_GROUPS = 4
 LAMBDA_KL = 1.0
 PRIOR_ALPHA = 0.5
 
-LR = {'brca': 0.0004, 'kirc': 0.0002, 'coad': 0.0002, 'lihc': 0.0002}[disease]
-WEIGHT_DECAY = {'brca': 0.0007, 'kirc': 0.0007, 'coad': 0.0007, 'lihc': 0.0007}[disease]
+LR_BY_DISEASE = {'brca': 0.0004, 'kirc': 0.0002, 'coad': 0.0002, 'lihc': 0.0002}
+WEIGHT_DECAY_BY_DISEASE = {'brca': 0.0007, 'kirc': 0.0007, 'coad': 0.0007, 'lihc': 0.0007}
+LR = LR_BY_DISEASE[disease]
+WEIGHT_DECAY = WEIGHT_DECAY_BY_DISEASE[disease]
+SUPPORTED_DISEASES = tuple(LR_BY_DISEASE.keys())
+
+
+def configure_disease(name):
+    """Set module-level disease and optimizer defaults (call before sweep)."""
+    global disease, LR, WEIGHT_DECAY
+    if name not in LR_BY_DISEASE:
+        raise ValueError('Unknown disease {!r}; expected one of {}'.format(name, SUPPORTED_DISEASES))
+    disease = name
+    LR = LR_BY_DISEASE[disease]
+    WEIGHT_DECAY = WEIGHT_DECAY_BY_DISEASE[disease]
 
 # Same Method-2 weight grid; K / λ_kl fixed to OMIDIENT BRCA defaults
 LAMBDA_REC_GRID_FULL = [0.3, 0.5, 0.7, 1.0, 1.5]
@@ -589,6 +602,7 @@ def run_sweep(args):
 
 
 def main(args):
+    configure_disease(args.disease)
     if args.summarize_only:
         summarize_best(metric=args.rank_metric)
         return
@@ -598,6 +612,13 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description='Method 2 + OMIDIENT private hyperparameter sweep'
+    )
+    parser.add_argument(
+        '--disease',
+        type=str,
+        default=disease,
+        choices=SUPPORTED_DISEASES,
+        help='Dataset key (results under results/models_{disease}_method2_omidient/)',
     )
     parser.add_argument('--epochs', type=int, default=EPOCHS)
     parser.add_argument('--batch-size', type=int, default=BATCH_SIZE)

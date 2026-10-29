@@ -42,13 +42,28 @@ BATCH_SIZE = 32
 USE_GPU = torch.cuda.is_available()
 SEED = 21
 TEMPERATURE = 0.4
-NUM_CLUST = {'lihc': 2, 'coad': 4, 'kirc': 2, 'brca': 5}[disease]
+NUM_CLUST_BY_DISEASE = {'lihc': 2, 'coad': 4, 'kirc': 2, 'brca': 5}
+NUM_CLUST = NUM_CLUST_BY_DISEASE[disease]
 K_NN = 15
 D_PCA = 50
 R_SPEC = SPECTRAL_DIM
 
-LR = {'brca': 0.0004, 'kirc': 0.0002, 'coad': 0.0002, 'lihc': 0.0002}[disease]
-WEIGHT_DECAY = {'brca': 0.0007, 'kirc': 0.0007, 'coad': 0.0007, 'lihc': 0.0007}[disease]
+LR_BY_DISEASE = {'brca': 0.0004, 'kirc': 0.0002, 'coad': 0.0002, 'lihc': 0.0002}
+WEIGHT_DECAY_BY_DISEASE = {'brca': 0.0007, 'kirc': 0.0007, 'coad': 0.0007, 'lihc': 0.0007}
+LR = LR_BY_DISEASE[disease]
+WEIGHT_DECAY = WEIGHT_DECAY_BY_DISEASE[disease]
+SUPPORTED_DISEASES = tuple(LR_BY_DISEASE.keys())
+
+
+def configure_disease(name):
+    """Set module-level disease, cluster count, and optimizer defaults."""
+    global disease, LR, WEIGHT_DECAY, NUM_CLUST
+    if name not in LR_BY_DISEASE:
+        raise ValueError('Unknown disease {!r}; expected one of {}'.format(name, SUPPORTED_DISEASES))
+    disease = name
+    LR = LR_BY_DISEASE[disease]
+    WEIGHT_DECAY = WEIGHT_DECAY_BY_DISEASE[disease]
+    NUM_CLUST = NUM_CLUST_BY_DISEASE[disease]
 
 # Coarse: 4 x 3 x 3 = 36 with fixed vic/view/leak
 LAMBDA_SPEC_GRID = [0.5, 1.0, 1.5, 2.0]
@@ -443,6 +458,7 @@ def run_sweep(args):
 
 
 def main(args):
+    configure_disease(args.disease)
     if args.summarize_only:
         summarize_best(metric=args.rank_metric)
         return
@@ -451,6 +467,13 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Method 3 hyperparameter sweep')
+    parser.add_argument(
+        '--disease',
+        type=str,
+        default=disease,
+        choices=SUPPORTED_DISEASES,
+        help='Dataset key (results under results/models_{disease}_method3/)',
+    )
     parser.add_argument('--epochs', type=int, default=EPOCHS)
     parser.add_argument('--batch-size', type=int, default=BATCH_SIZE)
     parser.add_argument('--resume', action='store_true')
