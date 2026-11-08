@@ -1,0 +1,42 @@
+\section{Introduction}
+
+Cancer is a molecularly heterogeneous disease. Patients who share a clinical diagnosis often differ in transcriptional programmes, epigenetic regulation, and post-transcriptional control, and those differences matter for prognosis and therapy selection~\citep{hasin2017multi,jiang2022big}. Multi-omics profiling---joint measurement of several molecular layers for the same samples---has therefore become a central resource for unsupervised discovery of tumour subtypes~\citep{mohr2024navigating}. Among public resources, The Cancer Genome Atlas (TCGA) remains the most widely used benchmark for method development, with breast invasive carcinoma (BRCA) providing a particularly mature subtype ontology through the PAM50 labels~\citep{parker2009pam50}.
+
+Integrating heterogeneous omics views is not merely a matter of concatenating features. Modalities differ in dimension, noise structure, and biological content: some signals are shared across assays, while others are view-specific. Classical integrative methods such as iCluster~\citep{shen2009integrative}, Multi-Omics Factor Analysis (MOFA)~\citep{argelaguet2018multi}, Joint and Individual Variation Explained (JIVE)~\citep{lock2013jive}, and Similarity Network Fusion (SNF)~\citep{wang2014snf} already encode this intuition by separating joint from individual structure, or by fusing patient similarity graphs. Deep learning has extended the same idea to nonlinear latent spaces. Shared--private autoencoders learn, for each modality~$m$, a shared code~$S_m$ intended to capture cross-view biology and a private code~$P_m$ intended to capture residual view-specific variation~\citep{chen2023mocss,xiao2022multi}. Contrastive alignment of projected shared codes, as in MOCSS~\citep{chen2023mocss}, encourages cross-omics consistency, while OMIDIENT replaces the private branch with a product-Dirichlet variational model while retaining a MOCSS-style shared pathway~\citep{Safinianaini_Välimäki_Bresson_Gorbonos_Rajamäki_Aaltonen_Marttinen_2025}.
+
+The practical success of these models is usually summarised by unsupervised clustering metrics on an integrated embedding---most often normalised mutual information (NMI) with clinical subtypes. High NMI is valuable, but it does not certify that~$S$ and~$P$ play their intended roles. A private code that quietly absorbs subtype-discriminative shared biology, or a shared code that mainly reconstructs local assay detail, can still yield competitive clustering after concatenation. Orthogonality penalties that act only through weak elementwise products do not guarantee statistical independence, and dual reconstruction paths that require both~$S_m$ and~$P_m$ to reconstruct the full input~$X_m$ actively encourage redundancy. Representation-learning research outside multi-omics has repeatedly shown that reconstruction alone does not identify the factors one cares about~\citep{bengio2013representation,Goodfellow-et-al-2016}; the same warning applies here.
+
+\paragraph{Motivating observation.}
+Preliminary diagnostics on BRCA, including embedding visualisations of the kind later summarised in Figure~\ref{fig:umap} (Chapter~\ref{sec:results}), suggest that models with similar integration NMI can exhibit qualitatively different shared--private geometries. In MOCSS, private embeddings often retain clear subtype structure, while the shared codes look only partially aligned with the same taxonomy. In OMIDIENT, private codes appear nearly non-informative for subtypes under concatenation metrics, yet own-view reconstruction probes indicate pathological collapse rather than clean privacy. Quantitative companions of those figures---NMI bars, metric heatmaps, and scatter plots of subtype separation against~$\Delta\mathrm{X}\,R^{2}$---point in the same direction. These observations motivate an evaluation protocol that treats role separation as a first-class scientific claim, not as a corollary of clustering accuracy.
+
+The thesis therefore separates two questions that are often conflated. The \emph{clustering} question asks whether an embedding recovers PAM50 structure. The \emph{decomposition} question asks whether cross-view signal concentrates in~$S$ while~$P$ remains residual or complementary. Answering the second requires probes that clustering tables omit.
+
+\subsection{Research questions}
+
+This thesis addresses the following questions.
+
+\begin{enumerate}
+\item Do high unsupervised subtype NMI scores of prior shared--private models (MOCSS, OMIDIENT) imply that~$S$ and~$P$ carry the intended complementary information on BRCA multi-omics data?
+\item Which label-free probes---in particular cross-view reconstruction gaps~$\Delta\mathrm{X}\,R^{2}$, own-view Ridge~$R^{2}$, centred kernel alignment (CKA), and embedding visualisations---best diagnose failures of shared--private decomposition?
+\item Can architectural and objective changes that enforce a clearer distinction between~$S$ and~$P$ (Methods~1--3 introduced in this thesis) improve role separation without sacrificing competitive integration performance?
+\item Among the proposed methods, which trade-offs between predictability constraints, VICReg-style independence, joint reconstruction, and spectral alignment are empirically preferable under a multi-seed BRCA evaluation?
+\end{enumerate}
+
+\subsection{Objectives and scope}
+
+The objective is not to maximise subtype NMI at all costs. Instead, the thesis aims to (i)~audit existing shared--private pipelines with probes that test whether foreign private codes predict another view better or worse than foreign shared codes; (ii)~design Methods~1--3 that operationalise shared content as cross-view predictable structure and private content as residual, view-local variation; and (iii)~compare methods under a fixed encoder backbone, label-free model selection, and multi-seed reporting. The empirical focus is TCGA BRCA with mRNA, DNA methylation, and miRNA views and PAM50 subtypes. Kidney renal clear cell carcinoma (KIRC) is included in the experimental setup as a secondary cohort; KIRC numerical results will be reported in a later revision of this thesis. Method~4 from the accompanying codebase is out of scope and is not discussed.
+
+\subsection{Contributions}
+
+The main contributions are as follows.
+
+\begin{enumerate}
+\item A critical multi-seed audit of MOCSS and OMIDIENT on BRCA showing that competitive integration NMI coexists with failed shared--private role assignment: MOCSS private codes steal subtype signal, while OMIDIENT private codes collapse under own-view probes despite large~$\Delta\mathrm{X}\,R^{2}$.
+\item An evaluation protocol centred on~$\Delta\mathrm{X}\,R^{2}$, role-aware UMAP inspection, and integration NMI, with an explicit rule against ranking models by minimising $\mathrm{concat}(P)$ subtype NMI alone.
+\item Three methods designed to enforce shared--private distinction: Method~1 (cross-view predictability with adversaries and private sufficiency), a Method~1+VICReg ablation, Method~2 (joint reconstruction with VICReg and contrastive alignment), and Method~3 (offline fused spectral targets with residual private decoding).
+\item A BRCA multi-seed ($n=5$, seeds $\{21,\ldots,25\}$) empirical comparison identifying Method~3 as the clearest winner on~$\Delta\mathrm{X}\,R^{2}$ while remaining competitive on concatenation NMI, and Method~2 as a simpler AE-private alternative preferred over the VICReg ablation when both role separation and integration are considered jointly.
+\end{enumerate}
+
+\subsection{Structure of the thesis}
+
+Chapter~\ref{sec:literature} reviews classical and deep multi-omics integration, with emphasis on shared--private models and evaluation pitfalls. Chapter~\ref{sec:background} summarises the biological setting and the technical background on autoencoders, contrastive learning, VICReg, spectral clustering, and clustering metrics. Chapter~\ref{sec:methodology} formalises the problem, describes baselines and Methods~1--3, and defines the evaluation protocol. Chapter~\ref{sec:results} reports BRCA multi-seed results, leading with shared--private diagnostics before subtyping performance. Chapter~\ref{sec:discussion} interprets the findings, limitations, and implications for future multi-omics representation learning. Chapter~\ref{sec:conclusions} concludes.

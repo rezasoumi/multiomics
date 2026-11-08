@@ -1,0 +1,93 @@
+\clearpage
+\section{Method~3 spectral details}
+\label{app:method3}
+
+This appendix expands the Method~3 construction summarised in Section~\ref{sec:methodology}. Notation matches the main text: modalities $m\in\{1,2,3\}$, encoders produce $(S_m,P_m)\in\mathbb{R}^{d}$ with $d=32$, and $\bar{S}=(S_1+S_2+S_3)/3$.
+
+\subsection{Offline fused spectral target}
+
+For each modality~$m$, let $X_m\in\mathbb{R}^{N\times d_m}$ denote the feature matrix of the $N$ patients used to build the graph (unlabelled; no PAM50 information). Apply PCA fitted on the training split to $d_{\mathrm{pca}}=50$ dimensions, then $\ell_2$-normalise each patient row. Build a mutual $k$-nearest-neighbour affinity with $k=15$ and cosine similarity:
+\begin{equation}
+A_m[i,j]
+=
+\begin{cases}
+\cos(z_{m,i},z_{m,j}), & j\in\mathrm{kNN}_k(i)\ \text{or}\ i\in\mathrm{kNN}_k(j),\\
+0, & \text{otherwise},
+\end{cases}
+\end{equation}
+symmetrise by $A_m\leftarrow\max(A_m,A_m^\top)$, and zero the diagonal. Fuse the three affinities by averaging,
+\begin{equation}
+A_{\mathrm{fused}}=\frac{1}{3}\bigl(A_1+A_2+A_3\bigr).
+\end{equation}
+Let $D=\mathrm{diag}\bigl(\sum_j A_{\mathrm{fused}}[i,j]\bigr)$ and form the normalised Laplacian
+\begin{equation}
+L = I - D^{-1/2} A_{\mathrm{fused}} D^{-1/2}.
+\end{equation}
+Compute the eigendecomposition $L\,U_{\mathrm{full}}=U_{\mathrm{full}}\Lambda$ and retain the $r=16$ eigenvectors corresponding to the smallest eigenvalues \emph{after} the trivial (near-constant) eigenvector. Row-normalise the resulting matrix $U\in\mathbb{R}^{N\times r}$. The matrix~$U$ is the offline spectral target used throughout Method~3 training. The unsupervised NMI of $k$-means on~$U$ itself is reported as the spectral ceiling $\mathrm{NMI}(U)$.
+
+\subsection{Spectral regression}
+
+A two-layer head $f_{\mathrm{spec}}:\mathbb{R}^{d}\rightarrow\mathbb{R}^{r}$ (hidden $\tanh$, linear output) maps the mean shared code to the spectral target:
+\begin{equation}
+\hat{U}_i = f_{\mathrm{spec}}(\bar{S}_i),
+\qquad
+\mathcal{L}_{\mathrm{spec}}
+=
+\frac{1}{N}\sum_{i=1}^{N}
+\bigl\|\hat{U}_i - U_i\bigr\|_{2}^{2}.
+\end{equation}
+This term is the operational definition of sharedness in Method~3:~$S$ is trained to match multi-omics neighbourhood geometry rather than to reconstruct assay intensities.
+
+\subsection{Residual private reconstruction}
+
+For each modality,
+\begin{equation}
+\hat{X}_m
+=
+\mathrm{Dec}_m\bigl(\mathrm{concat}(P_m,\mathrm{stopgrad}(S_m))\bigr),
+\qquad
+\mathcal{L}_{\mathrm{res}}
+=
+\sum_{m=1}^{3}
+\mathrm{recon}(\hat{X}_m,X_m),
+\end{equation}
+where $\mathrm{recon}$ is the MOCSS-style centred, row-normalised matrix-norm metric. Stop-gradient on~$S_m$ ensures that residual decoding cannot redefine the shared code as a second full autoencoder of~$X_m$.
+
+\subsection{View-identity head}
+
+A classifier $h_{\mathrm{view}}:\mathbb{R}^{d}\rightarrow\mathbb{R}^{3}$ is applied to each private code:
+\begin{equation}
+\mathcal{L}_{\mathrm{view}}
+=
+\sum_{m=1}^{3}
+\mathrm{CE}\bigl(h_{\mathrm{view}}(P_m),\, m-1\bigr).
+\end{equation}
+Minimising $\mathcal{L}_{\mathrm{view}}$ encourages~$P_m$ to retain assay-identifying information, i.e.\ content that is useful for recognising the modality and therefore less likely to be purely shared biology.
+
+\subsection{GRL non-leakage adversary}
+
+Let $q_i$ be a soft cluster assignment derived from stop-gradient features of~$\bar{S}$ (refreshed cluster prototypes / soft labels with $K$ clusters). An adversary $h_{\mathrm{adv}}$ is applied to private codes through a gradient-reversal layer $\mathrm{GRL}_\lambda$:
+\begin{equation}
+\mathcal{L}_{\mathrm{leak}}
+=
+\sum_{m=1}^{3}
+\mathrm{CE}\bigl(h_{\mathrm{adv}}(\mathrm{GRL}_\lambda(P_m)),\, q\bigr).
+\end{equation}
+Forward evaluation trains $h_{\mathrm{adv}}$ to predict~$q$ from~$P_m$; reversed gradients encourage the encoder to make~$P_m$ uninformative about the shared soft clustering. This is the non-leakage regulariser that complements residual reconstruction.
+
+\subsection{Full Method~3 objective}
+
+Optional VICReg and demoted contrastive terms may be included. The training objective used in the BRCA sweeps is
+\begin{equation}
+\begin{aligned}
+\mathcal{L}
+&=
+\lambda_{\mathrm{spec}}\,\mathcal{L}_{\mathrm{spec}}
++\lambda_{\mathrm{res}}\,\mathcal{L}_{\mathrm{res}}
++\lambda_{\mathrm{ctr}}\,\mathcal{L}_{\mathrm{ctr}}
++\lambda_{\mathrm{vic}}\,\mathcal{L}_{\mathrm{vic}}
++\lambda_{\mathrm{view}}\,\mathcal{L}_{\mathrm{view}}
++\lambda_{\mathrm{leak}}\,\mathcal{L}_{\mathrm{leak}}.
+\end{aligned}
+\end{equation}
+Label-free ranking uses the core score $\mathcal{L}_{\mathrm{spec}}+\mathcal{L}_{\mathrm{res}}+\mathcal{L}_{\mathrm{ctr}}$ (unweighted), treating VICReg, view, and leak terms as training regularisers. The loss-best BRCA configuration reported in the main text uses $\lambda_{\mathrm{ctr}}=0$, which helps explain the comparatively low shared CKA of Method~3.

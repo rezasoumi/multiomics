@@ -1,0 +1,79 @@
+%% Front matter: preface, table of contents, symbols and abbreviations
+%% Included from thesistemplate.tex (no \documentclass / preamble here).
+
+\mysection{Preface}
+
+This Master's thesis was carried out in the Machine Learning for Health research group at the Department of Computer Science, Aalto University. I am grateful to Professor Pekka Marttinen for supervising the work and for continuous scientific guidance on representation learning and probabilistic modelling. I thank Negar Safinianaini for co-supervision, for introducing me to the OMIDIENT line of research, and for many detailed discussions on shared--private multi-omics models and evaluation practice. Their feedback substantially shaped both the methodological choices and the critical interpretation of the experimental results.
+
+I also thank colleagues and fellow students who provided informal feedback on figures, writing, and experimental design. Any remaining errors are my own.
+
+\vspace{5cm}
+Otaniemi, November 2026\\
+
+\vspace{5mm}
+{\hfill Reza Soumi \hspace{1cm}}
+
+\newpage
+
+\thesistableofcontents
+
+\mysection{Symbols and abbreviations}
+
+\subsection*{Symbols}
+
+\begin{tabular}{ll}
+$M$ & number of omics modalities (views) \\
+$m$ & modality index, $m \in \{1,\ldots,M\}$ \\
+$N$ & number of samples (patients) \\
+$X_m$ & observed feature matrix of modality $m$ \\
+$S_m$ & intended shared latent code of modality $m$ \\
+$P_m$ & intended private / view-specific latent code of modality $m$ \\
+$\bar{S}$ & mean shared embedding, $\bar{S}=\mathrm{mean}_m(S_m)$ \\
+$[P;S]$ & concatenation of private and shared codes \\
+$U$ & offline fused spectral target (Laplacian embedding) \\
+$r$ & spectral target dimension (here $r=16$) \\
+$\mathrm{Dec}$, $D$ & decoder / reconstruction network \\
+$h,f,g,k,b$ & Method~1 predictability networks \\
+$f_{\mathrm{spec}}$ & spectral regression head mapping $\bar{S}$ to $U$ \\
+$\lambda_{\mathrm{ctr}},\lambda_{\mathrm{vic}},\ldots$ & loss weights for contrastive, VICReg, and related terms \\
+$\Delta\mathrm{X}\,R^{2}$ & cross-view probe gap $R^{2}(X\leftarrow S_{\mathrm{other}})-R^{2}(X\leftarrow P_{\mathrm{other}})$ \\
+$\mathrm{NMI}$ & normalised mutual information \\
+$\mathrm{ARI}$ & adjusted Rand index \\
+$\mathrm{CKA}$ & centred kernel alignment \\
+$\mathcal{L}$ & training objective (loss) \\
+\end{tabular}
+
+\subsection*{Operators}
+
+\begin{tabular}{ll}
+$\|\,\cdot\,\|$ & matrix or vector norm (as indicated in context) \\
+$\mathrm{concat}(\cdot)$ & concatenation of latent codes \\
+$\mathrm{stopgrad}(\cdot)$ & stop-gradient (detach) operator \\
+$\mathbb{E}[\,\cdot\,]$ & expectation \\
+$R^{2}(Y\leftarrow Z)$ & coefficient of determination of Ridge regression from $Z$ to $Y$ \\
+\end{tabular}
+
+\subsection*{Abbreviations}
+
+\begin{tabular}{ll}
+AE & autoencoder \\
+ARI & adjusted Rand index \\
+BRCA & breast invasive carcinoma (TCGA cohort) \\
+CCA & canonical correlation analysis \\
+CKA & centred kernel alignment \\
+GRL & gradient reversal layer \\
+InfoNCE & information noise-contrastive estimation (contrastive loss) \\
+JIVE & Joint and Individual Variation Explained \\
+KIRC & kidney renal clear cell carcinoma (TCGA cohort) \\
+MLP & multilayer perceptron \\
+MOCSS & Multi-Omics Contrastive Shared-Specific learning \\
+MOFA & Multi-Omics Factor Analysis \\
+NMI & normalised mutual information \\
+OMIDIENT & multi-omics integration with Dirichlet autoencoder networks \\
+PAM50 & Prediction Analysis of Microarray 50 (breast cancer subtypes) \\
+SNF & Similarity Network Fusion \\
+TCGA & The Cancer Genome Atlas \\
+UMAP & Uniform Manifold Approximation and Projection \\
+VAE & variational autoencoder \\
+VICReg & Variance--Invariance--Covariance Regularization \\
+\end{tabular}

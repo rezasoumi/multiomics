@@ -1,0 +1,140 @@
+\begin{thebibliography}{}
+
+\bibitem[Argelaguet et~al., 2018]{argelaguet2018multi}
+Argelaguet, R., Velten, B., Arnol, D., Dietrich, S., Zenz, T., Marioni, J.~C., Buettner, F., Huber, W., and Stegle, O. (2018).
+\newblock Multi-omics factor analysis—a framework for unsupervised integration of multi-omics data sets.
+\newblock {\em Molecular systems biology}, 14(6):e8124.
+
+\bibitem[Bai{\~a}o et~al., 2025]{baiao2025technical}
+Bai{\~a}o, A.~R., Cai, Z., Poulos, R.~C., Robinson, P.~J., Reddel, R.~R., Zhong, Q., Vinga, S., and Gon{\c{c}}alves, E. (2025).
+\newblock A technical review of multi-omics data integration methods: from classical statistical to deep generative approaches.
+\newblock {\em arXiv preprint arXiv:2501.17729}.
+
+\bibitem[Bardes et~al., 2022]{bardes2022vicreg}
+Bardes, A., Ponce, J., and LeCun, Y. (2022).
+\newblock {VICReg}: Variance-invariance-covariance regularization for self-supervised learning.
+\newblock In {\em International Conference on Learning Representations}.
+
+\bibitem[Bengio et~al., 2013]{bengio2013representation}
+Bengio, Y., Courville, A., and Vincent, P. (2013).
+\newblock Representation learning: A review and new perspectives.
+\newblock {\em IEEE transactions on pattern analysis and machine intelligence}, 35(8):1798--1828.
+
+\bibitem[Cantini et~al., 2021]{cantini2021benchmarking}
+Cantini, L., Zakeri, P., Hernandez, C., Naldi, A., Thieffry, D., Remy, E., and Baudot, A. (2021).
+\newblock Benchmarking joint multi-omics dimensionality reduction approaches for the study of cancer.
+\newblock {\em Nature Communications}, 12(1):124.
+
+\bibitem[Chen et~al., 2020]{chen2020simple}
+Chen, T., Kornblith, S., Norouzi, M., and Hinton, G. (2020).
+\newblock A simple framework for contrastive learning of visual representations.
+\newblock In {\em International conference on machine learning}, pages 1597--1607. PmLR.
+
+\bibitem[Chen et~al., 2023]{chen2023mocss}
+Chen, Y., Wen, Y., Xie, C., Chen, X., He, S., Bo, X., and Zhang, Z. (2023).
+\newblock Mocss: Multi-omics data clustering and cancer subtyping via shared and specific representation learning.
+\newblock {\em Iscience}, 26(8).
+
+\bibitem[Goodfellow et~al., 2016]{Goodfellow-et-al-2016}
+Goodfellow, I., Bengio, Y., and Courville, A. (2016).
+\newblock {\em Deep Learning}.
+\newblock MIT Press.
+\newblock \url{http://www.deeplearningbook.org}.
+
+\bibitem[Hasin et~al., 2017]{hasin2017multi}
+Hasin, Y., Seldin, M., and Lusis, A. (2017).
+\newblock Multi-omics approaches to disease.
+\newblock {\em Genome biology}, 18:1--15.
+
+\bibitem[Jiang et~al., 2022]{jiang2022big}
+Jiang, P., Sinha, S., Aldape, K., Hannenhalli, S., Sahinalp, C., and Ruppin, E. (2022).
+\newblock Big data in basic and translational cancer research.
+\newblock {\em Nature Reviews Cancer}, 22(11):625--639.
+
+\bibitem[Kingma et~al., 2013]{kingma2013auto}
+Kingma, D.~P., Welling, M., et~al. (2013).
+\newblock Auto-encoding variational bayes.
+
+\bibitem[Kuhn, 1955]{Kuhn1955Hungarian}
+Kuhn, H.~W. (1955).
+\newblock {The Hungarian Method for the Assignment Problem}.
+\newblock {\em Naval Research Logistics Quarterly}, 2(1--2):83--97.
+
+\bibitem[Levine et~al., 2013]{levine2013integrated}
+Levine, D.~A., sequencing~centres: Broad Institute Getz Gad 1 Gabriel Stacey B. 1 Cibulskis Kristian 1 Lander Eric 1 Sivachenko Andrey 1 Sougnez Carrie 1 Lawrence Mike~1, C. G. A. R. N.~G., in~St~Louis Kandoth Cyriac 2 Dooling David 2 Fulton Robert 2 Fulton Lucinda 2 Kalicki-Veizer Joelle 2 McLellan Michael D. 2 O’Laughlin Michelle 2 Schmidt Heather 2 Wilson Richard K. 2 Ye Kai 2 Ding Li 2 Mardis Elaine R.~2, W.~U., of~Southern California \& Johns Hopkins Baylin Stephen B. 21 Bootwalla Moiz S. 22 Lai Phillip H. 22 Triche Jr Timothy J. 22 Van Den Berg David J. 22 Weisenberger Daniel J. 22 Laird Peter W. 22 Shen Hui~22, U., for Systems Biology Reynolds Sheila M. 23 Shmulevich Ilya~23, I., et~al. (2013).
+\newblock Integrated genomic characterization of endometrial carcinoma.
+\newblock {\em Nature}, 497(7447):67--73.
+
+\bibitem[Lloyd, 1982]{lloyd1982least}
+Lloyd, S. (1982).
+\newblock Least squares quantization in pcm.
+\newblock {\em IEEE transactions on information theory}, 28(2):129--137.
+
+\bibitem[Lock et~al., 2013]{lock2013jive}
+Lock, E.~F., Hoadley, K.~A., Marron, J.~S., and Nobel, A.~B. (2013).
+\newblock {JIVE}: Joint and individual variation explained.
+\newblock {\em The Annals of Applied Statistics}, 7(1):523--542.
+
+\bibitem[M{\"a}rtens and Yau, 2024]{martens2024disentangling}
+M{\"a}rtens, K. and Yau, C. (2024).
+\newblock Disentangling shared and private latent factors in multimodal {Variational} {Autoencoders}.
+\newblock In {\em Proceedings of the 9th Machine Learning for Healthcare Conference}, volume 240 of {\em Proceedings of Machine Learning Research}. PMLR.
+
+\bibitem[Mohr et~al., 2024]{mohr2024navigating}
+Mohr, A.~E., Ortega-Santos, C.~P., Whisner, C.~M., Klein-Seetharaman, J., and Jasbi, P. (2024).
+\newblock Navigating challenges and opportunities in multi-omics integration for personalized healthcare.
+\newblock {\em Biomedicines}, 12(7):1496.
+
+\bibitem[Ng et~al., 2002]{ng2002spectral}
+Ng, A.~Y., Jordan, M.~I., and Weiss, Y. (2002).
+\newblock On spectral clustering: Analysis and an algorithm.
+\newblock In {\em Advances in Neural Information Processing Systems}, volume~14.
+
+\bibitem[Parker et~al., 2009]{parker2009pam50}
+Parker, J.~S., Mullins, M., Cheang, M. C.~U., Leung, S., Voduc, D., Vickery, T., Davies, S., Fauron, C., He, X., Hu, Z., Quackenbush, J.~F., Stijleman, I.~J., Palazzo, J., Marron, J.~S., Nobel, A.~B., Mardis, E., Nielsen, T.~O., Ellis, M.~J., Perou, C.~M., and Bernard, P.~S. (2009).
+\newblock Supervised risk predictor of breast cancer based on intrinsic subtypes.
+\newblock {\em Journal of Clinical Oncology}, 27(8):1160--1167.
+
+\bibitem[Rappoport and Shamir, 2021]{rappoport2021evaluation}
+Rappoport, N. and Shamir, R. (2021).
+\newblock Evaluation and comparison of multi-omics data integration methods for cancer subtyping.
+\newblock {\em PLOS Computational Biology}, 17(7):e1009224.
+\newblock See also earlier related benchmarks; year may vary by venue version.
+
+\bibitem[Safinianaini et~al., 2025]{Safinianaini_Välimäki_Bresson_Gorbonos_Rajamäki_Aaltonen_Marttinen_2025}
+Safinianaini, N., V{\"a}lim{\"a}ki, N., Bresson, R., Gorbonos, A., Rajam{\"a}ki, K., Aaltonen, L.~A., and Marttinen, P. (2025).
+\newblock {OMIDIENT}: Multiomics integration for cancer by dirichlet auto-encoder networks.
+\newblock {\em bioRxiv}.
+\newblock Also published in Communications Biology (2026).
+
+\bibitem[Shen et~al., 2009]{shen2009integrative}
+Shen, R., Olshen, A.~B., and Ladanyi, M. (2009).
+\newblock Integrative clustering of multiple genomic data types using a joint latent variable model with application to breast and lung cancer subtype analysis.
+\newblock {\em Bioinformatics}, 25(22):2906--2912.
+
+\bibitem[von Luxburg, 2007]{vonluxburg2007tutorial}
+von Luxburg, U. (2007).
+\newblock A tutorial on spectral clustering.
+\newblock {\em Statistics and Computing}, 17(4):395--416.
+
+\bibitem[Wang et~al., 2014]{wang2014snf}
+Wang, B., Mezlini, A.~M., Demir, F., Fiume, M., Tu, Z., Brudno, M., Haibe-Kains, B., and Goldenberg, A. (2014).
+\newblock Similarity network fusion for aggregating data types on a genomic scale.
+\newblock {\em Nature Methods}, 11(3):333--337.
+
+\bibitem[Xiao et~al., 2022]{xiao2022multi}
+Xiao, Y., Bi, M., Guo, H., and Li, M. (2022).
+\newblock Multi-omics approaches for biomarker discovery in early ovarian cancer diagnosis.
+\newblock {\em EBioMedicine}, 79.
+
+\bibitem[Yeung and Ruzzo, 2001]{yeung2001principal}
+Yeung, K.~Y. and Ruzzo, W.~L. (2001).
+\newblock Principal component analysis for clustering gene expression data.
+\newblock {\em Bioinformatics}, 17(9):763--774.
+
+\bibitem[Zbontar et~al., 2021]{zbontar2021barlow}
+Zbontar, J., Jing, L., Misra, I., LeCun, Y., and Deny, S. (2021).
+\newblock {Barlow Twins}: Self-supervised learning via redundancy reduction.
+\newblock In {\em Proceedings of the 38th International Conference on Machine Learning}, volume 139 of {\em Proceedings of Machine Learning Research}, pages 12310--12320. PMLR.
+
+\end{thebibliography}

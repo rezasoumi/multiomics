@@ -1,0 +1,232 @@
+\clearpage
+\section{Results}
+\label{sec:results}
+
+This chapter reports empirical findings on TCGA BRCA. Shared--private diagnostics are presented before subtyping leaderboards, reflecting the thesis claim that integration NMI alone is an incomplete success criterion. All headline numbers are mean~$\pm$~sample standard deviation over five training seeds $\{21,22,23,24,25\}$ unless noted. KIRC is described in the setup but numerical KIRC results are deferred to a later revision.
+
+\subsection{Experimental setup}
+
+\paragraph{Datasets.}
+Table~\ref{tab:datasets} summarises the prepared cohorts. BRCA is the evaluation focus: three modalities after feature selection, $N=875$ samples, and five PAM50 subtypes~\citep{parker2009pam50}. KIRC is included in the repository pipeline with two evaluation classes; its results will be reported in a later revision of this thesis.
+
+\begin{table}[htbp]
+\centering
+\caption{Dataset statistics for the prepared multi-omics tables used in this thesis.}
+\label{tab:datasets}
+\begin{tabular}{lrrrrr}
+\hline
+Cohort & mRNA & Methylation & miRNA & Samples & Subtypes / classes \\
+\hline
+BRCA & 1000 & 1000 & 503 & 875 & 5 (PAM50) \\
+KIRC & 58316 & 22928 & 1879 & 289 & 2 \\
+\hline
+\end{tabular}
+\end{table}
+
+\paragraph{Training and selection.}
+Encoders are four-layer $\tanh$ MLPs with widths $[512,256,128,32]$. BRCA models use batch size~$32$, at most~$100$ epochs, and early stopping as described in Chapter~\ref{sec:methodology}. Hyperparameter grids are method-specific; the reported ``loss-best'' row for each method is the configuration with best label-free core validation loss on the development protocol, then re-evaluated across seeds. Clustering uses $k$-means with $n_{\mathrm{init}}=30$~\citep{lloyd1982least}. Hungarian matching is used for clustering accuracy~\citep{Kuhn1955Hungarian}.
+
+\paragraph{Compared systems.}
+AE-private comparisons include MOCSS~\citep{chen2023mocss}, Method~1+$b_m$, Method~1+VICReg+$b_m$, Method~2, and Method~3. The OMIDIENT family includes OMIDIENT~\citep{Safinianaini_Välimäki_Bresson_Gorbonos_Rajamäki_Aaltonen_Marttinen_2025} and Method~2 with OMIDIENT private codes. Method~4 from the codebase is not evaluated here.
+
+\subsection{Shared versus private analysis}
+
+The central empirical claim is that competitive subtype NMI does not imply successful shared--private decomposition. Figures~\ref{fig:heatmap-ae}--\ref{fig:umap} and Tables~\ref{tab:shared-private-ae}--\ref{tab:shared-private-omid} support that claim.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{03_metric_heatmap_ae.png}
+\caption{Compact metric heatmap for AE-private methods on BRCA (multi-seed means). Rows are methods; columns include mean$(S)$ NMI, $\mathrm{concat}(P)$ NMI, $\mathrm{concat}(P,S)$ NMI, $\Delta\mathrm{X}\,R^{2}$, own-view probes, and CKA. Colour encodes relative magnitude within each column.}
+\label{fig:heatmap-ae}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{03_metric_heatmap_omidient.png}
+\caption{Compact metric heatmap for the OMIDIENT family on BRCA. Near-zero $\mathrm{concat}(P)$ NMI co-occurs with large $\Delta\mathrm{X}\,R^{2}$ and pathological own-view $X\leftarrow P$ scores.}
+\label{fig:heatmap-omid}
+\end{figure}
+
+\begin{table}[htbp]
+\centering
+\caption{Shared--private diagnostic panel on BRCA (AE private). Mean~$\pm$~std over seeds $\{21,\ldots,25\}$.}
+\label{tab:shared-private-ae}
+\begin{tabular}{lcccc}
+\hline
+Method & mean$(S)$ NMI & $\mathrm{concat}(P)$ NMI & $\mathrm{concat}(P,S)$ NMI & $\Delta\mathrm{X}\,R^{2}$ \\
+\hline
+MOCSS & $0.418\pm0.014$ & $0.466\pm0.017$ & $0.461\pm0.008$ & $0.045\pm0.023$ \\
+M1+$b_m$ & $0.414\pm0.030$ & $0.237\pm0.099$ & $0.323\pm0.063$ & $-0.038\pm0.095$ \\
+M1+VICReg+$b_m$ & $0.423\pm0.021$ & $0.254\pm0.051$ & $0.394\pm0.035$ & $-0.061\pm0.071$ \\
+Method~2 & $0.417\pm0.028$ & $0.389\pm0.034$ & $0.434\pm0.033$ & $0.051\pm0.044$ \\
+Method~3 & $0.414\pm0.029$ & $0.443\pm0.014$ & $0.456\pm0.025$ & $0.248\pm0.023$ \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\caption{Shared--private diagnostic panel on BRCA (OMIDIENT family). Mean~$\pm$~std over seeds $\{21,\ldots,25\}$.}
+\label{tab:shared-private-omid}
+\begin{tabular}{lcccc}
+\hline
+Method & mean$(S)$ NMI & $\mathrm{concat}(P)$ NMI & $\mathrm{concat}(P,S)$ NMI & $\Delta\mathrm{X}\,R^{2}$ \\
+\hline
+OMIDIENT & $0.426\pm0.046$ & $0.039\pm0.009$ & $0.430\pm0.054$ & $1.114\pm0.013$ \\
+M2+OMID.\ private & $0.410\pm0.018$ & $0.043\pm0.002$ & $0.409\pm0.014$ & $0.770\pm0.055$ \\
+\hline
+\end{tabular}
+\end{table}
+
+\paragraph{MOCSS: private codes steal subtype.}
+For MOCSS, $\mathrm{concat}(P)$ NMI ($0.466\pm0.017$) is essentially tied with $\mathrm{concat}(P,S)$ ($0.461\pm0.008$) and exceeds mean$(S)$ ($0.418\pm0.014$). The cross-view gap is only $\Delta\mathrm{X}\,R^{2}=0.045\pm0.023$, indicating weak preference for foreign shared codes over foreign private codes. Own-view Ridge scores reinforce the redundancy story: $X\leftarrow P$ ($0.481\pm0.006$) exceeds $X\leftarrow S$ ($0.404\pm0.013$), so private codes are highly reconstructive of the full input. Figure~\ref{fig:nmi-ae} visualises the NMI pattern; Figure~\ref{fig:umap} shows subtype geometry clearly present in MOCSS private embeddings. High unsupervised integration NMI therefore does \emph{not} imply that~$S$ and~$P$ play distinct roles.
+
+\paragraph{OMIDIENT: collapse rather than verified privacy.}
+OMIDIENT yields mean$(S)$ NMI $0.426\pm0.046$ and $\mathrm{concat}(P)$ NMI $0.039\pm0.009$, with a very large $\Delta\mathrm{X}\,R^{2}=1.114\pm0.013$. Read in isolation, these numbers look like extreme shared--private separation. Own-view probes contradict that reading: $X\leftarrow P\approx-0.342$ is strongly negative, consistent with private-path collapse of the Dirichlet branch rather than informative privacy. Single-seed shared NMI near~$0.50$ shrinks under multi-seed aggregation, cautioning against leaderboard optimism from one seed~\citep{baiao2025technical}. Method~2+OMIDIENT-private inherits the same private collapse signature ($X\leftarrow P\approx-0.341$) despite Method~2's joint decoder, showing that Dirichlet private geometry---not only MOCSS dual reconstruction---can drive the failure.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{01_nmi_bars_ae.png}
+\caption{BRCA multi-seed NMI bars for AE-private methods: mean$(S)$, $\mathrm{concat}(P)$, and $\mathrm{concat}(P,S)$. MOCSS private NMI rivals concatenation; Method~1 variants suppress private NMI but also weaken concatenation; Methods~2--3 preserve competitive concatenation.}
+\label{fig:nmi-ae}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{01_nmi_bars_omidient.png}
+\caption{BRCA multi-seed NMI bars for the OMIDIENT family. Near-zero $\mathrm{concat}(P)$ NMI should not be read as successful disentanglement without own-view probes.}
+\label{fig:nmi-omid}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{02_scatter_separation_vs_delta_xr2.png}
+\caption{Subtype separation versus $\Delta\mathrm{X}\,R^{2}$ on BRCA. Desirable models sit toward higher separation with clearly positive $\Delta\mathrm{X}\,R^{2}$. Method~3 occupies the most favourable region among AE-private methods; OMIDIENT's extreme $\Delta$ coincides with private collapse and is not treated as a verified win.}
+\label{fig:scatter}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[height=0.72\textheight,keepaspectratio]{05_embedding_umap.png}
+\caption{UMAP of mean$(S)$ (left) and $\mathrm{concat}(P)$ (right) coloured by PAM50 subtype for the methods emphasised in this thesis (MOCSS, Method~1, Method~1+VICReg, Method~2, Method~3, OMIDIENT). Focus on those rows; any additional Method~4 row that may appear in the panel is outside the scope of this thesis and should be ignored. MOCSS private embeddings retain strong subtype structure; Method~2 shows structured but differently organised layouts on both sides; Method~3 preserves competitive shared geometry; OMIDIENT private embeddings lack subtype organisation consistent with collapse.}
+\label{fig:umap}
+\end{figure}
+
+\paragraph{Method 1 and Method 1+VICReg.}
+Method~1+$b_m$ reduces $\mathrm{concat}(P)$ NMI to $0.237\pm0.099$, but concatenation NMI falls to a weak $0.323\pm0.063$ and $\Delta\mathrm{X}\,R^{2}$ is noisy and on average slightly negative ($-0.038\pm0.095$). These results are not promising as a shared--private solution for two related reasons. First, the drop in $\mathrm{concat}(P)$ NMI was bought at the price of integration: the fused embedding used for subtyping becomes substantially worse than MOCSS ($0.323$ vs.\ $0.461$), so the model no longer delivers competitive unsupervised subtyping even if private subtype content has been partially suppressed. Second, the intended cross-view asymmetry still fails: $\Delta\mathrm{X}\,R^{2}$ does not become stably positive, and seed variance is large ($\pm0.095$), which is consistent with the brittleness of Method~1's two-step adversaries. In short, Method~1 can change the NMI bars without establishing that foreign~$S$ carries the shared content that foreign~$P$ does not.
+
+Method~1+VICReg+$b_m$ is stabler and produces the most MOCSS-like \emph{look} of an AE subtype split in the sense that mean$(S)$ NMI ($0.423\pm0.021$) exceeds $\mathrm{concat}(P)$ ($0.254\pm0.051$). Yet $\Delta\mathrm{X}\,R^{2}=-0.061\pm0.071$ remains unfavourable and concatenation NMI ($0.394\pm0.035$) still trails Method~2 and Method~3. The ablation therefore improves hygiene relative to full Method~1, but still fails the probe that defines ``shared'' in the cross-view sense. The lesson is explicit: low $\mathrm{concat}(P)$ NMI is not a sufficient statistic for disentanglement.
+
+\paragraph{Method 2 versus VICReg ablation.}
+Method~2 recovers concatenation NMI $0.434\pm0.033$ with $\Delta\mathrm{X}\,R^{2}=+0.051\pm0.044$. UMAP layouts are structured on both shared and private sides but organised differently, consistent with complementary rather than duplicated geometry. This profile is preferred over Method~1+VICReg: similar shared NMI, better integration, and a positive---if modest---cross-view gap. At the same time, Method~2's $\Delta\mathrm{X}\,R^{2}$ remains close to MOCSS ($0.045$) and far below Method~3 ($0.248$). That gap is the clearest quantitative signal that Method~2 does \emph{not} yet achieve the role separation this thesis aims for. Technically, the limitation is unsurprising: VICReg only soft-penalises \emph{linear} $P$--$S$ dependence (variance hinges, within-code covariance whitening, and Frobenius cross-covariance), and the joint decoder $D([P;S])\rightarrow X$ still succeeds whenever shared and private content overlap, as long as the concatenation remains reconstructive. There is no operational pressure that forces cross-view content into~$S$ and residual content into~$P$ in the way Method~1's $f$/$g$ predictors or Method~3's spectral target do. A stronger nonlinear independence criterion, or an explicit cross-view shared objective, might close part of that gap; under the present design, Method~2 behaves like a cleaner MOCSS rather than like a verified shared--private theory. Method~3 is the method that actually delivers the desired distinction on BRCA.
+
+\paragraph{Method 3: clearest $\Delta\mathrm{X}\,R^{2}$ win.}
+Method~3 attains $\Delta\mathrm{X}\,R^{2}=0.248\pm0.023$, a clear separation from all other AE-private methods, while remaining competitive on concatenation NMI ($0.456\pm0.025$). Private concatenation NMI remains high ($0.443\pm0.014$); under the interpretation rule of Chapter~\ref{sec:methodology} this is acceptable when probes and UMAP indicate complementary biology rather than role collapse. The offline spectral target has unsupervised ceiling $\mathrm{NMI}(U)\approx0.387$, so Method~3's shared NMI ($0.414\pm0.029$) slightly exceeding that ceiling indicates that residual decoding, view heads, and encoder nonlinearities still contribute beyond pure Laplacian regression. Shared CKA for Method~3 is comparatively low ($0.547\pm0.017$ vs.\ $\approx0.76$--$0.79$ for MOCSS/Method~2/VICReg). This is expected rather than paradoxical: the loss-best Method~3 configuration uses $\lambda_{\mathrm{ctr}}=0$, so the InfoNCE alignment that usually inflates pairwise shared CKA is demoted, and the spectral objective aligns $\bar{S}$ to~$U$ without requiring the individual $S_m$ to be as linearly similar to each other as in contrastive-heavy runs. Lower CKA should therefore be read together with the strong $\Delta\mathrm{X}\,R^{2}$: Method~3 trades contrastive-driven shared homogeneity for a geometry-defined shared role.
+
+\subsection{Subtyping performance}
+
+Table~\ref{tab:subtyping} reports standard unsupervised subtyping metrics on the loss-best configurations. MOCSS remains strong on concatenation NMI/ARI/accuracy, as expected from a model whose private codes carry subtype signal. Method~3 matches MOCSS closely on concatenation NMI ($0.456$ vs.\ $0.461$) while delivering the superior $\Delta\mathrm{X}\,R^{2}$ already discussed. Method~2 is slightly behind on concatenation NMI but preferable to Method~1 variants that sacrifice integration for lower private NMI. OMIDIENT concatenation NMI ($0.430\pm0.054$) is competitive in mean but more variable across seeds.
+
+\begin{table}[htbp]
+\centering
+\caption{Unsupervised subtyping on BRCA for loss-best configurations (mean~$\pm$~std over five seeds). Concatenation metrics use $\mathrm{concat}(P,S)$; $s_{\mathrm{NMI}}$ is NMI on mean$(S)$.}
+\label{tab:subtyping}
+\begin{tabular}{lcccc}
+\hline
+Method & concat NMI & $s_{\mathrm{NMI}}$ & ARI & Acc \\
+\hline
+MOCSS & $0.461\pm0.008$ & $0.418\pm0.014$ & $0.360\pm0.032$ & $0.643\pm0.060$ \\
+M1+$b_m$ & $0.323\pm0.063$ & $0.414\pm0.030$ & $0.190\pm0.062$ & $0.485\pm0.060$ \\
+M1+VICReg+$b_m$ & $0.394\pm0.035$ & $0.423\pm0.021$ & $0.273\pm0.070$ & $0.579\pm0.073$ \\
+Method~2 & $0.434\pm0.033$ & $0.417\pm0.028$ & $0.320\pm0.049$ & $0.621\pm0.070$ \\
+Method~3 & $0.456\pm0.025$ & $0.414\pm0.029$ & $0.330\pm0.047$ & $0.626\pm0.049$ \\
+OMIDIENT & $0.430\pm0.054$ & $0.426\pm0.046$ & --- & --- \\
+\hline
+\end{tabular}
+\end{table}
+
+Own-view and alignment complements appear in Table~\ref{tab:ownview}. MOCSS shows the strongest private reconstructiveness. Method~3 balances own-view $X\leftarrow S$ and $X\leftarrow P$ more evenly while keeping a large cross-view $\Delta\mathrm{X}\,R^{2}$. OMIDIENT's negative $X\leftarrow P$ remains the decisive collapse indicator.
+
+\begin{table}[htbp]
+\centering
+\caption{Own-view Ridge $R^{2}$ and shared CKA on BRCA (mean~$\pm$~std over five seeds).}
+\label{tab:ownview}
+\begin{tabular}{lcccc}
+\hline
+Method & $X\leftarrow S$ & $X\leftarrow P$ & $X\leftarrow[P;S]$ & CKA \\
+\hline
+MOCSS & $0.404\pm0.013$ & $0.481\pm0.006$ & $0.363\pm0.015$ & $0.761\pm0.024$ \\
+M1+$b_m$ & $0.294\pm0.032$ & $0.414\pm0.028$ & $0.338\pm0.030$ & $0.589\pm0.103$ \\
+M1+VICReg+$b_m$ & $0.347\pm0.040$ & $0.427\pm0.020$ & $0.346\pm0.028$ & $0.788\pm0.013$ \\
+Method~2 & $0.376\pm0.013$ & $0.442\pm0.004$ & $0.377\pm0.003$ & $0.770\pm0.023$ \\
+Method~3 & $0.402\pm0.006$ & $0.412\pm0.011$ & $0.375\pm0.010$ & $0.547\pm0.017$ \\
+OMIDIENT & $0.427\pm0.008$ & $-0.342\pm0.000$ & $0.243\pm0.011$ & $0.757\pm0.037$ \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Method-wise findings}
+
+\paragraph{MOCSS.}
+Serves as a strong clustering baseline and as a negative example for role assignment: $\mathrm{concat}(P)\approx\mathrm{concat}(P,S)>\mathrm{mean}(S)$ with small $\Delta\mathrm{X}\,R^{2}$.
+
+\paragraph{OMIDIENT.}
+Advances private-branch modelling and remains a strong integration baseline, but near-zero $\mathrm{concat}(P)$ NMI under the probes of this thesis coincides with private-path collapse ($X\leftarrow P<0$); multi-seed evaluation and own-view probes are essential before reading that pattern as a verified shared--private win.
+
+\paragraph{Method 1.}
+Enforces predictability constraints effectively enough to shrink private NMI, but integration suffers and $\Delta\mathrm{X}\,R^{2}$ remains unstable across seeds.
+
+\paragraph{Method 1+VICReg.}
+Improves shared--private NMI ordering relative to MOCSS and stabilises CKA, yet negative $\Delta\mathrm{X}\,R^{2}$ and middling concatenation NMI make it inferior to Method~2 under the joint decision rule.
+
+\paragraph{Method 2.}
+Best simple AE-private compromise relative to Method~1 variants: joint reconstruction removes dual solo paths, VICReg replaces weak orthogonality, and multi-seed metrics remain competitive with structured UMAP on both branches. Its modest $\Delta\mathrm{X}\,R^{2}$ shows that the desired cross-view role separation is still incomplete under linear VICReg alone.
+
+\paragraph{Method 3.}
+Best probe-centred outcome: largest AE-private $\Delta\mathrm{X}\,R^{2}$, competitive concatenation NMI, and acceptable high private NMI interpreted as complementary signal. Lower shared CKA is explained by demoting contrastive alignment on the loss-best run. Performance remains bounded by spectral target quality ($\mathrm{NMI}(U)\approx0.387$).
+
+\subsection{Hyperparameter sweeps}
+
+Figures~\ref{fig:sweep-m1}--\ref{fig:sweep-omid} summarise label-free leaderboards over method-specific grids. Method~1 and Method~1+VICReg exhibit broad sensitivity to adversary and private-sufficiency weights: many configs that minimise private NMI also degrade concatenation NMI. Method~2 sweeps over $(\lambda_{\mathrm{rec}},\lambda_{\mathrm{ctr}},\lambda_{\mathrm{vic}})$ show a stable ridge of competitive models around moderate contrastive weight; the loss-best point used above is representative rather than an isolated spike. Method~3 sweeps indicate that larger spectral weights favour $\Delta\mathrm{X}\,R^{2}$, while $\lambda_{\mathrm{ctr}}=0$ frequently appears among loss-best settings, suggesting that the fused Laplacian target already supplies much of the cross-view alignment pressure. OMIDIENT orthogonality sweeps and Method~2+OMIDIENT-private sweeps confirm that near-zero private NMI and negative $X\leftarrow P$ persist across wide regulariser ranges, so collapse is not an artefact of a single $\lambda$.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{06_sweep_method1.png}
+\caption{Hyperparameter sweep overview for Method~1 on BRCA. Performance varies sharply with predictability weights; loss-best selection does not coincide with minimal $\mathrm{concat}(P)$ NMI.}
+\label{fig:sweep-m1}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{06_sweep_method1_vicreg.png}
+\caption{Hyperparameter sweep overview for Method~1+VICReg on BRCA.}
+\label{fig:sweep-m1vic}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{06_sweep_method2.png}
+\caption{Hyperparameter sweep overview for Method~2 on BRCA over reconstruction, contrastive, and VICReg weights.}
+\label{fig:sweep-m2}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{06_sweep_method3.png}
+\caption{Hyperparameter sweep overview for Method~3 on BRCA. Stronger spectral weighting improves cross-view gaps; contrastive weight is often selected as zero under core loss ranking.}
+\label{fig:sweep-m3}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{06_sweep_method2_omidient.png}
+\caption{Sweep overview for Method~2 with OMIDIENT private codes. Private collapse signatures remain visible across the grid.}
+\label{fig:sweep-m2omid}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{06_sweep_omidient_ortho.png}
+\caption{OMIDIENT orthogonality-weight sweep. Near-zero $\mathrm{concat}(P)$ NMI and negative own-view $X\leftarrow P$ are stable across $\lambda_{\mathrm{ortho}}$.}
+\label{fig:sweep-omid}
+\end{figure}

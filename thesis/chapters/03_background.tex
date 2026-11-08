@@ -1,0 +1,54 @@
+\clearpage
+\section{Background}
+\label{sec:background}
+
+This chapter provides the biological and technical background required for the methodology. Biological subsections introduce multi-omics data, TCGA cohorts, and PAM50 subtypes. Technical subsections summarise autoencoders and VAEs, contrastive learning, VICReg, spectral clustering, and the clustering and probe metrics used later.
+
+\subsection{Multi-omics profiling in cancer}
+
+An \emph{omics} modality is a high-dimensional molecular assay summarised as a sample-by-feature matrix. In this thesis three modalities are central: messenger RNA (mRNA) expression, DNA methylation, and microRNA (miRNA) expression. Jointly they capture transcriptional state, epigenetic regulation, and post-transcriptional control~\citep{hasin2017multi}. Because the assays are generated from the same tumour aliquots, matched multi-omics enables unsupervised integration aimed at patient subtypes rather than at single-assay artefacts~\citep{jiang2022big,mohr2024navigating}.
+
+Challenges are substantial. Feature dimensions differ by orders of magnitude before selection; noise and missingness patterns are modality-specific; and biological signal may be shared, partially shared, or private. Linear dimension reduction such as principal component analysis remains a useful preprocessing and diagnostic tool~\citep{yeung2001principal}, but nonlinear encoders are often needed once interactions across thousands of features are considered~\citep{Goodfellow-et-al-2016}.
+
+\subsection{TCGA BRCA and KIRC}
+
+The Cancer Genome Atlas provides harmonised multi-omics for many tumour types. Breast invasive carcinoma (BRCA) is the primary cohort in this work. After the preprocessing used in the accompanying codebase, BRCA comprises $N=875$ samples with $1000$ mRNA features, $1000$ methylation features, and $503$ miRNA features, labelled into five PAM50 subtypes~\citep{parker2009pam50}. Kidney renal clear cell carcinoma (KIRC) is a secondary cohort with $N=289$ samples, much higher raw feature dimensionality ($58316$ mRNA, $22928$ methylation, $1879$ miRNA features in the prepared tables), and two clinical classes in the evaluation setting used here. KIRC results are deferred to a later revision; the cohort is mentioned so that the experimental design remains explicit about intended generalisation beyond BRCA.
+
+\subsection{PAM50 breast cancer subtypes}
+
+PAM50 is a nearest-centroid classifier based on a fifty-gene expression signature that assigns breast tumours to intrinsic subtypes such as Luminal~A, Luminal~B, HER2-enriched, Basal-like, and Normal-like~\citep{parker2009pam50}. Although derived from transcriptomics, PAM50 labels correlate with multi-omics structure and are the de facto unsupervised benchmark target for BRCA integration methods~\citep{chen2023mocss,rappoport2021evaluation}. In this thesis PAM50 labels are used only for evaluation, never for model selection: checkpoints are ranked by label-free validation loss.
+
+\subsection{Autoencoders and variational autoencoders}
+
+An autoencoder (AE) learns an encoder $f_{\mathrm{enc}}$ and decoder $f_{\mathrm{dec}}$ by minimising a reconstruction loss between $X$ and $\hat{X}=f_{\mathrm{dec}}(f_{\mathrm{enc}}(X))$~\citep{Goodfellow-et-al-2016}. Bottleneck latents act as compressed representations for downstream clustering. A variational autoencoder (VAE) places a probabilistic encoder $q(z\mid x)$ and a prior $p(z)$ in an evidence lower-bound objective~\citep{kingma2013auto}. OMIDIENT's private branch is a Dirichlet-oriented VAE variant rather than a standard Gaussian VAE~\citep{Safinianaini_Välimäki_Bresson_Gorbonos_Rajamäki_Aaltonen_Marttinen_2025}. Throughout Methods~1--3, unless otherwise stated, private and shared encoders follow a deterministic AE parameterisation aligned with MOCSS for fair comparison.
+
+\subsection{Contrastive learning and InfoNCE}
+
+Contrastive learning trains embeddings so that positive pairs are close and negatives are far in a projected space~\citep{chen2020simple}. The InfoNCE loss is a standard instantiation: for a batch of projected embeddings, each anchor is classified against negatives via a temperature-scaled softmax. In multi-omics shared--private models, positives are matched samples' shared codes across modalities. Contrastive pressure encourages cross-view alignment of~$S$, but if reconstruction also forces~$S_m$ to encode private detail, contrastive learning alone cannot purify the shared subspace.
+
+\subsection{VICReg and independence regularisation}
+
+Variance--Invariance--Covariance Regularization (VICReg)~\citep{bardes2022vicreg} stabilises non-contrastive learning through three terms: a variance hinge that prevents dimensional collapse, a covariance penalty that reduces redundancy within an embedding, and---when applied to two embeddings---a cross-covariance penalty that encourages linear independence. Barlow Twins pursues a related redundancy-reduction goal~\citep{zbontar2021barlow}. In this thesis a VICReg-style penalty is applied between~$P_m$ and~$S_m$ inside each modality for Method~1+VICReg and Method~2, replacing MOCSS's weak elementwise orthogonality. Linear independence is not full statistical disentanglement~\citep{martens2024disentangling}, but it is a stricter and more interpretable constraint than elementwise co-activation penalties.
+
+\subsection{Spectral clustering and fused graphs}
+
+Spectral clustering embeds samples using eigenvectors of a graph Laplacian and then applies $k$-means in that embedding~\citep{ng2002spectral,vonluxburg2007tutorial,lloyd1982least}. SNF-style fusion builds a single patient graph that aggregates neighbourhood agreement across modalities~\citep{wang2014snf}. Method~3 precomputes a fused $k$-nearest-neighbour graph offline, extracts a Laplacian embedding~$U\in\mathbb{R}^{N\times r}$ with $r=16$, and trains shared codes to regress toward~$U$. The NMI of $k$-means on~$U$ itself is an unsupervised ceiling for how much subtype signal the spectral target contains; on BRCA that ceiling is approximately $\mathrm{NMI}(U)\approx 0.387$ in the configuration used here.
+
+\subsection{Clustering metrics and assignment}
+
+Unsupervised subtype recovery is evaluated with normalised mutual information (NMI), adjusted Rand index (ARI), clustering accuracy after optimal label permutation via the Hungarian algorithm~\citep{Kuhn1955Hungarian}, and $k$-nearest-neighbour classification accuracy in the embedding space. NMI and ARI compare partitions without requiring label alignment; accuracy requires a matching between cluster indices and true labels. All clustering in this thesis uses $k$-means with $n_{\mathrm{init}}=30$~\citep{lloyd1982least}.
+
+\subsection{Probe metrics for shared--private roles}
+
+Because clustering metrics do not test role assignment, additional probes are required. Cross-view Ridge regression asks how well modality~$A$'s features are predicted from other modalities' shared codes versus private codes. The signed gap
+\begin{equation}
+\Delta\mathrm{X}\,R^{2}
+\;=\;
+R^{2}\!\left(X_A\leftarrow (S_B,S_C)\right)
+-
+R^{2}\!\left(X_A\leftarrow (P_B,P_C)\right)
+\end{equation}
+is positive when foreign shared codes explain~$X_A$ better than foreign private codes---the intended asymmetry. Own-view Ridge~$R^{2}$ for $X_m\leftarrow S_m$, $X_m\leftarrow P_m$, and $X_m\leftarrow[P_m;S_m]$ diagnoses collapse and redundancy within a modality. Centred kernel alignment (CKA) summarises linear similarity among shared codes across views. Embedding visualisations (UMAP) provide qualitative evidence of whether subtype geometry lives primarily in~$S$, in~$P$, or in both.
+
+\paragraph{Interpretation rule.}
+Low $\mathrm{concat}(P)$ subtype NMI is not by itself evidence of good disentanglement: private codes may have collapsed, or they may carry complementary subtype-related biology. Models are therefore judged jointly by~$\Delta\mathrm{X}\,R^{2}$, UMAP role separation, and integration NMI on $\mathrm{concat}(P,S)$ or related fused embeddings.
