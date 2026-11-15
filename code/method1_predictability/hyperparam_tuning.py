@@ -332,10 +332,7 @@ def train_one(batch, epochs, lr, wd, alpha, beta, gamma, lambda_priv, lambda_ctr
     eval_loss = fixed_eval_loss(best_terms)
 
     torch.save(best_state, os.path.join(path, 'model_{}'.format(disease)))
-    np.save(os.path.join(path, 'train_data_{}'.format(disease)), X_train)
-    np.save(os.path.join(path, 'train_label_{}'.format(disease)), y_train)
-    np.save(os.path.join(path, 'val_data_{}'.format(disease)), X_val)
-    np.save(os.path.join(path, 'val_label_{}'.format(disease)), y_val)
+    # Skip train/val omics dumps (huge on KIRC); resume rebuilds val if needed.
     np.save(os.path.join(path, 'test_data_{}'.format(disease)), X_test)
     np.save(os.path.join(path, 'test_label_{}'.format(disease)), y_test)
     np.save(os.path.join(path, 'loss.npy'), loss_best)
