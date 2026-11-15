@@ -4,12 +4,12 @@ Examples:
   python -m multiomics.code.multiseed.run --seeds 21,22,23,24,25 --resume
   python -m multiomics.code.multiseed.run --runs method1,mocss --seeds 21,22 --resume
   python -m multiomics.code.multiseed.run --aggregate-only --seeds 21,22,23,24,25
+  python -m multiomics.code.multiseed.run --seeds 21-50 --resume --summary-dir ../../results/multiseed_30
 """
 
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import sys
 
@@ -19,22 +19,44 @@ from multiomics.code.multiseed.aggregate import aggregate_runs, write_summary
 from multiomics.code.multiseed.paper_configs import (
     DEFAULT_SEEDS,
     PAPER_RUNS,
+    SEEDS_30,
     get_run,
     list_run_ids,
 )
+from multiomics.code.multiseed.paths import summary_dir
 from multiomics.code.multiseed.trainers import run_one
 
 
 def _parse_seeds(text: str):
+    """Parse '21,22,23' or ranges '21-50' / '21..50' (inclusive)."""
     seeds = []
     for part in text.split(','):
         part = part.strip()
         if not part:
             continue
-        seeds.append(int(part))
-    if not seeds:
+        if part.lower() in ('n30', 'seeds30'):
+            seeds.extend(SEEDS_30)
+            continue
+        for sep in ('-', '..'):
+            if sep in part:
+                a, b = part.split(sep, 1)
+                lo, hi = int(a.strip()), int(b.strip())
+                if hi < lo:
+                    raise ValueError('Bad seed range {!r}'.format(part))
+                seeds.extend(range(lo, hi + 1))
+                break
+        else:
+            seeds.append(int(part))
+    # stable unique
+    seen = set()
+    out = []
+    for s in seeds:
+        if s not in seen:
+            seen.add(s)
+            out.append(s)
+    if not out:
         raise ValueError('No seeds parsed from {!r}'.format(text))
-    return seeds
+    return out
 
 
 def _parse_runs(text: str):
@@ -58,7 +80,10 @@ def main(argv=None):
         '--seeds',
         type=str,
         default=','.join(str(s) for s in DEFAULT_SEEDS),
-        help='Comma-separated training seeds (default: {})'.format(DEFAULT_SEEDS),
+        help=(
+            'Comma-separated seeds, inclusive ranges (21-50), or n30 for '
+            'seeds 21..50 (default: {})'.format(DEFAULT_SEEDS)
+        ),
     )
     parser.add_argument(
         '--runs',
@@ -78,7 +103,16 @@ def main(argv=None):
     parser.add_argument(
         '--aggregate-only',
         action='store_true',
-        help='Only build results/multiseed/summary*.{json,csv,md} from existing runs',
+        help='Only build summary*.{json,csv,md} from existing runs',
+    )
+    parser.add_argument(
+        '--summary-dir',
+        type=str,
+        default='',
+        help=(
+            'Where to write summary.json / summary_flat.csv / readme_snippets.md '
+            '(default: results/multiseed). Use results/multiseed_30 for the 30-seed run.'
+        ),
     )
     parser.add_argument(
         '--list-runs',
@@ -121,8 +155,9 @@ def main(argv=None):
                     resume=args.resume,
                 )
 
+    out_dir = args.summary_dir.strip() or summary_dir()
     summary = aggregate_runs(seeds=seeds, run_ids=run_ids)
-    out = write_summary(summary)
+    out = write_summary(summary, out_dir=out_dir)
     print('\nDone. Provide this file for README updates:')
     print(' ', out)
     print('Also useful:')

@@ -8,6 +8,8 @@ from __future__ import annotations
 
 # Default seeds for mean ± std (include original sweep seed 21).
 DEFAULT_SEEDS = [21, 22, 23, 24, 25]
+# Extended multi-seed (includes the original five; resume skips finished dirs).
+SEEDS_30 = list(range(21, 51))  # 21 .. 50 inclusive
 
 # Metrics written into multiseed summary / used for README ± columns.
 COMPACT_KEYS = [
