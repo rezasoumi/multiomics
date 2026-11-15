@@ -542,11 +542,18 @@ def run_sweep(args):
             print('Skip (already evaluated): {}'.format(name))
             continue
 
-        model_file = os.path.join(results_parent(), name, 'model_{}'.format(disease))
-        if args.resume and os.path.exists(model_file) and not args.retrain:
+        path = os.path.join(results_parent(), name)
+        model_file = os.path.join(path, 'model_{}'.format(disease))
+        loss_file = os.path.join(path, 'loss.npy')
+        test_file = os.path.join(path, 'test_data_{}.npy'.format(disease))
+        checkpoint_ok = (
+            os.path.exists(model_file)
+            and os.path.exists(loss_file)
+            and os.path.exists(test_file)
+        )
+        if args.resume and checkpoint_ok and not args.retrain:
             print('Found existing model, evaluating only: {}'.format(name))
-            path = os.path.join(results_parent(), name)
-            val_loss = float(np.load(os.path.join(path, 'loss.npy')))
+            val_loss = float(np.load(loss_file))
             eval_loss = compute_eval_loss_from_checkpoint(
                 path,
                 batch=batch,
@@ -559,6 +566,8 @@ def run_sweep(args):
                 },
             )
         else:
+            if args.resume and os.path.exists(model_file) and not checkpoint_ok:
+                print('Incomplete checkpoint (missing loss/test); retraining: {}'.format(name))
             path, name, val_loss, eval_loss = train_one(
                 batch, epochs, lr, wd, lambda_rec, lambda_ctr, lambda_vic, k_groups
             )
