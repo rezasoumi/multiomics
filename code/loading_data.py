@@ -1,6 +1,25 @@
+import os
+
 import numpy as np
 import pandas as pd
 from sklearn import preprocessing
+from sklearn.model_selection import train_test_split
+
+
+def load_or_rebuild_test_split(disease, config_dir, random_state=1):
+    """Load saved test split, or rebuild the same 80/20 split used in training."""
+    data_path = os.path.join(config_dir, 'test_data_{}.npy'.format(disease))
+    label_path = os.path.join(config_dir, 'test_label_{}.npy'.format(disease))
+    if os.path.exists(data_path) and os.path.exists(label_path):
+        return (
+            np.load(data_path),
+            np.load(label_path, allow_pickle=True),
+        )
+    _, _, _, view_train_concatenate, y_true = load_data(disease)
+    _, X_test, _, y_test = train_test_split(
+        view_train_concatenate, y_true, test_size=0.2, random_state=random_state
+    )
+    return X_test, y_test
 
 
 def load_data(disease):

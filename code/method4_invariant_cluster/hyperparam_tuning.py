@@ -373,12 +373,7 @@ def run_sweep(args):
         path = os.path.join(results_parent(), name)
         model_file = os.path.join(path, 'model_{}'.format(disease))
         loss_file = os.path.join(path, 'loss.npy')
-        test_file = os.path.join(path, 'test_data_{}.npy'.format(disease))
-        checkpoint_ok = (
-            os.path.exists(model_file)
-            and os.path.exists(loss_file)
-            and os.path.exists(test_file)
-        )
+        checkpoint_ok = os.path.exists(model_file) and os.path.exists(loss_file)
         if args.resume and checkpoint_ok and not args.retrain:
             print('Found existing model, evaluating only: {}'.format(name))
             val_loss = float(np.load(loss_file))
@@ -391,7 +386,7 @@ def run_sweep(args):
                 eval_loss = float(np.load(os.path.join(path, 'eval_loss.npy')))
         else:
             if args.resume and os.path.exists(model_file) and not checkpoint_ok:
-                print('Incomplete checkpoint (missing loss/test); retraining: {}'.format(name))
+                print('Incomplete checkpoint (missing loss.npy); retraining: {}'.format(name))
             path, name, val_loss, eval_loss = train_one(
                 batch, epochs, lr, wd,
                 lambda_dec, lambda_agree, lambda_res, lambda_view, lambda_leak, lambda_ctr, lambda_vic,

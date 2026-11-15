@@ -119,6 +119,43 @@ def best_json_path():
     return os.path.join(results_parent(), 'best_config.json')
 
 
+KEEP_MODELS = 5
+
+
+def prune_heavy_artifacts(keep=KEEP_MODELS):
+    """Keep full models only for top-`keep` configs by eval_loss; drop omics dumps everywhere."""
+    path = leaderboard_path()
+    parent = results_parent()
+    keep_names = set()
+    if os.path.exists(path) and os.path.getsize(path) > 0:
+        with open(path, 'r', newline='') as f:
+            rows = [r for r in csv.DictReader(f) if r.get('config') and r.get('eval_loss') not in (None, '')]
+        rows.sort(key=lambda r: float(r['eval_loss']))
+        keep_names = {r['config'] for r in rows[:keep]}
+    if not os.path.isdir(parent):
+        return
+    for name in os.listdir(parent):
+        d = os.path.join(parent, name)
+        if not os.path.isdir(d):
+            continue
+        for fn in os.listdir(d):
+            fp = os.path.join(d, fn)
+            if not os.path.isfile(fp):
+                continue
+            drop = (
+                fn.startswith('train_')
+                or fn.startswith('val_')
+                or fn.startswith('test_')
+                or (fn.startswith('model_') and name not in keep_names)
+            )
+            if drop:
+                try:
+                    os.remove(fp)
+                except OSError:
+                    pass
+
+
+
 def append_leaderboard(row, fieldnames):
     path = leaderboard_path()
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -350,9 +387,7 @@ def train_one(batch, epochs, lr, wd, lambda_rec, lambda_ctr, lambda_vic, k_group
     eval_loss = fixed_eval_loss(best_terms)
 
     torch.save(best_state, os.path.join(path, 'model_{}'.format(disease)))
-    # Skip train/val omics dumps (huge on KIRC); resume rebuilds val if needed.
-    np.save(os.path.join(path, 'test_data_{}'.format(disease)), X_test)
-    np.save(os.path.join(path, 'test_label_{}'.format(disease)), y_test)
+    # Do not save omics arrays (huge on KIRC). evaluate rebuilds the test split.
     np.save(os.path.join(path, 'loss.npy'), loss_best)
     np.save(os.path.join(path, 'eval_loss.npy'), eval_loss)
     np.save(
@@ -545,12 +580,7 @@ def run_sweep(args):
         path = os.path.join(results_parent(), name)
         model_file = os.path.join(path, 'model_{}'.format(disease))
         loss_file = os.path.join(path, 'loss.npy')
-        test_file = os.path.join(path, 'test_data_{}.npy'.format(disease))
-        checkpoint_ok = (
-            os.path.exists(model_file)
-            and os.path.exists(loss_file)
-            and os.path.exists(test_file)
-        )
+        checkpoint_ok = os.path.exists(model_file) and os.path.exists(loss_file)
         if args.resume and checkpoint_ok and not args.retrain:
             print('Found existing model, evaluating only: {}'.format(name))
             val_loss = float(np.load(loss_file))
@@ -567,7 +597,7 @@ def run_sweep(args):
             )
         else:
             if args.resume and os.path.exists(model_file) and not checkpoint_ok:
-                print('Incomplete checkpoint (missing loss/test); retraining: {}'.format(name))
+                print('Incomplete checkpoint (missing loss.npy); retraining: {}'.format(name))
             path, name, val_loss, eval_loss = train_one(
                 batch, epochs, lr, wd, lambda_rec, lambda_ctr, lambda_vic, k_groups
             )
@@ -603,6 +633,7 @@ def run_sweep(args):
         append_leaderboard(row, fieldnames)
         with open(os.path.join(path, 'metrics.json'), 'w') as f:
             json.dump(row, f, indent=2)
+        prune_heavy_artifacts()
 
     summarize_best(metric=args.rank_metric)
 

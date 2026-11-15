@@ -7,7 +7,7 @@ import warnings
 import numpy as np
 import torch
 
-from multiomics.code.loading_data import load_data
+from multiomics.code.loading_data import load_data, load_or_rebuild_test_split
 from multiomics.code import util
 from multiomics.code.method2_omidient_private.model import SharedAndSpecificEmbedding
 from multiomics.code.shared_rep_metrics import (
@@ -68,11 +68,7 @@ def evaluate_config(disease, config_dir, plot=False, k_groups=None):
     if k_groups is None:
         k_groups = parse_k_from_config(folder)
 
-    data = np.load(os.path.join(config_dir, 'test_data_{}.npy'.format(disease)))
-    label = np.load(
-        os.path.join(config_dir, 'test_label_{}.npy'.format(disease)),
-        allow_pickle=True,
-    )
+    data, label = load_or_rebuild_test_split(disease, config_dir)
 
     model = build_model(
         [view1_data.shape[1], view2_data.shape[1], view3_data.shape[1]],
