@@ -24,6 +24,16 @@ source ${SCRATCH}/multiomics/venv/bin/activate
 
 # cwd must be under code/* so loading_data.py ../../data resolves to repo/data
 mkdir -p ${REPO}/results ${REPO}/logs ${REPO}/results/multiseed_30
+# Parents for paper configs (avoids ENOENT if a prior cleanup left a broken link/file)
+mkdir -p \
+  ${REPO}/results/models_brca_ae \
+  ${REPO}/results/models_brca_method1 \
+  ${REPO}/results/models_brca_method1_vicreg \
+  ${REPO}/results/models_brca_method2 \
+  ${REPO}/results/models_brca_method2_omidient \
+  ${REPO}/results/models_brca_ProdGammaDirVae \
+  ${REPO}/results/models_brca_method3 \
+  ${REPO}/results/models_brca_method4
 cd ${REPO}/code/multiseed
 
 # Same paper-priority BRCA configs as run_multiseed.slurm, but 30 seeds (21..50).

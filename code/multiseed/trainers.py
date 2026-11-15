@@ -12,7 +12,12 @@ import torch.optim
 from sklearn.model_selection import train_test_split
 
 from multiomics.code.loading_data import load_data
-from multiomics.code.multiseed.paths import metrics_path, model_path, seed_run_dir
+from multiomics.code.multiseed.paths import (
+    ensure_seed_run_dir,
+    metrics_path,
+    model_path,
+    seed_run_dir,
+)
 
 DISEASE = 'brca'
 TEMPERATURE = 0.4
@@ -91,8 +96,7 @@ def train_mocss(run: dict, seed: int, epochs: int, batch_size: int, resume: bool
     from multiomics.code.ae.evaluate import evaluate_config
 
     hp = run['hparams']
-    path = seed_run_dir(run['results_subdir'], run['base_config'], seed)
-    os.makedirs(path, exist_ok=True)
+    path = ensure_seed_run_dir(run['results_subdir'], run['base_config'], seed)
     if _already_done(path, resume):
         print('Skip (resume): {}'.format(path))
         return path
@@ -176,8 +180,7 @@ def train_method1(run: dict, seed: int, epochs: int, batch_size: int, resume: bo
     from multiomics.code.method1_predictability.hyperparam_tuning import fixed_eval_loss
 
     hp = run['hparams']
-    path = seed_run_dir(run['results_subdir'], run['base_config'], seed)
-    os.makedirs(path, exist_ok=True)
+    path = ensure_seed_run_dir(run['results_subdir'], run['base_config'], seed)
     if _already_done(path, resume):
         print('Skip (resume): {}'.format(path))
         return path
@@ -282,8 +285,7 @@ def train_method1_vicreg(
     from multiomics.code.method1_vicreg_ablation.hyperparam_tuning import fixed_eval_loss
 
     hp = run['hparams']
-    path = seed_run_dir(run['results_subdir'], run['base_config'], seed)
-    os.makedirs(path, exist_ok=True)
+    path = ensure_seed_run_dir(run['results_subdir'], run['base_config'], seed)
     if _already_done(path, resume):
         print('Skip (resume): {}'.format(path))
         return path
@@ -386,8 +388,7 @@ def train_method2(run: dict, seed: int, epochs: int, batch_size: int, resume: bo
     from multiomics.code.method2_joint_vicreg.hyperparam_tuning import fixed_eval_loss
 
     hp = run['hparams']
-    path = seed_run_dir(run['results_subdir'], run['base_config'], seed)
-    os.makedirs(path, exist_ok=True)
+    path = ensure_seed_run_dir(run['results_subdir'], run['base_config'], seed)
     if _already_done(path, resume):
         print('Skip (resume): {}'.format(path))
         return path
@@ -491,8 +492,7 @@ def train_method2_omidient(
     )
 
     hp = run['hparams']
-    path = seed_run_dir(run['results_subdir'], run['base_config'], seed)
-    os.makedirs(path, exist_ok=True)
+    path = ensure_seed_run_dir(run['results_subdir'], run['base_config'], seed)
     if _already_done(path, resume):
         print('Skip (resume): {}'.format(path))
         return path
@@ -586,8 +586,7 @@ def train_omidient(run: dict, seed: int, epochs: int, batch_size: int, resume: b
     from multiomics.code.prod_gamma_dirvae.evaluate import evaluate_config
 
     hp = run['hparams']
-    path = seed_run_dir(run['results_subdir'], run['base_config'], seed)
-    os.makedirs(path, exist_ok=True)
+    path = ensure_seed_run_dir(run['results_subdir'], run['base_config'], seed)
     if _already_done(path, resume):
         print('Skip (resume): {}'.format(path))
         return path
@@ -702,8 +701,7 @@ def train_method3(run: dict, seed: int, epochs: int, batch_size: int, resume: bo
     from multiomics.code.multiseed.paths import repo_results_root
 
     hp = run['hparams']
-    path = seed_run_dir(run['results_subdir'], run['base_config'], seed)
-    os.makedirs(path, exist_ok=True)
+    path = ensure_seed_run_dir(run['results_subdir'], run['base_config'], seed)
     if _already_done(path, resume):
         print('Skip (resume): {}'.format(path))
         return path
@@ -846,8 +844,7 @@ def train_method4(run: dict, seed: int, epochs: int, batch_size: int, resume: bo
     )
 
     hp = run['hparams']
-    path = seed_run_dir(run['results_subdir'], run['base_config'], seed)
-    os.makedirs(path, exist_ok=True)
+    path = ensure_seed_run_dir(run['results_subdir'], run['base_config'], seed)
     if _already_done(path, resume):
         print('Skip (resume): {}'.format(path))
         return path

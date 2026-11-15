@@ -18,6 +18,7 @@ module load scicomp-pytorch-env
 SCRATCH=/scratch/work/soumir1
 REPO=${SCRATCH}/githubmultiomics/multiomics
 export PYTHONPATH=${SCRATCH}/githubmultiomics:${SCRATCH}
+export PYTHONNOUSERSITE=1
 
 source ${SCRATCH}/multiomics/venv/bin/activate
 
