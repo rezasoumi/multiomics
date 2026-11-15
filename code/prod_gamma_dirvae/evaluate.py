@@ -15,7 +15,7 @@ import warnings
 import numpy as np
 import torch
 
-from multiomics.code.loading_data import load_data
+from multiomics.code.loading_data import load_data, load_or_rebuild_test_split
 from multiomics.code import util
 from multiomics.code.prod_gamma_dirvae.prod_gamma_dirvae_cancer import (
     SharedAndSpecificEmbedding,
@@ -67,11 +67,7 @@ def evaluate_config(disease, config_dir, folder_name, plot=False):
     view1_data, view2_data, view3_data, _, _ = load_data(disease)
     k_groups = parse_k_from_config(folder_name)
 
-    data = np.load(os.path.join(config_dir, 'test_data_{}.npy'.format(disease)))
-    label = np.load(
-        os.path.join(config_dir, 'test_label_{}.npy'.format(disease)),
-        allow_pickle=True,
-    )
+    data, label = load_or_rebuild_test_split(disease, config_dir)
 
     model = SharedAndSpecificEmbedding(
         'ProdGamDirVae',

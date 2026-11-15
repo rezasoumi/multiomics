@@ -10,6 +10,7 @@ Configs are ranked by unweighted eval_loss = L_ctr + L_recon + KL
 (λ weights and L_ortho excluded from ranking, same spirit as Method 2).
 """
 
+import torch
 import torch.optim
 import numpy as np
 import argparse
@@ -39,8 +40,17 @@ LR = 0.0003
 WEIGHT_DECAY = 5e-4
 K_GROUPS = 4
 BATCH_SIZE = 32
-USE_GPU = True
+USE_GPU = torch.cuda.is_available()
 SEED = 21
+KEEP_MODELS = 5
+SUPPORTED_DISEASES = ('brca', 'kirc', 'coad', 'lihc')
+
+
+def configure_disease(name):
+    global disease
+    if name not in SUPPORTED_DISEASES:
+        raise ValueError('Unknown disease {!r}; expected one of {}'.format(name, SUPPORTED_DISEASES))
+    disease = name
 
 # Default λ matching original hardcoded objective: 1·L_ctr + 0.7·L_recon + 1·KL (+ 1·L_ortho)
 DEFAULT_LAMBDA_CTR = 1.0
@@ -87,6 +97,62 @@ def config_directory(use_orthogonal, lambda_ctr, lambda_recon, lambda_kl, lambda
 
 def results_parent():
     return '../../results/models_{}_ProdGammaDirVae'.format(disease)
+
+
+def _is_ortho_config(name):
+    return '_ortho_' in name or name.endswith('_ortho')
+
+
+def prune_heavy_artifacts(keep=KEEP_MODELS, use_orthogonal=None):
+    """Keep full models only for top-`keep` finished configs by eval_loss.
+
+    Only touches configs matching ``use_orthogonal`` (so no-ortho / +ortho
+    sweeps sharing the same results parent cannot prune each other).
+    Always drops train_/val_/test_ omics dumps.
+    """
+    parent = results_parent()
+    if not os.path.isdir(parent):
+        return
+
+    def matches_variant(name):
+        is_ortho = _is_ortho_config(name)
+        if use_orthogonal is True:
+            return is_ortho
+        if use_orthogonal is False:
+            return not is_ortho
+        return True
+
+    scored = []
+    for name in os.listdir(parent):
+        path = os.path.join(parent, name)
+        if not os.path.isdir(path) or not matches_variant(name):
+            continue
+        eval_path = os.path.join(path, 'eval_loss.npy')
+        model_path = os.path.join(path, 'model_{}'.format(disease))
+        if not (os.path.isfile(eval_path) and os.path.isfile(model_path)):
+            continue
+        scored.append((float(np.load(eval_path)), name))
+    scored.sort(key=lambda t: t[0])
+    keep_names = {name for _, name in scored[:keep]}
+    for name in os.listdir(parent):
+        d = os.path.join(parent, name)
+        if not os.path.isdir(d) or not matches_variant(name):
+            continue
+        for fn in os.listdir(d):
+            fp = os.path.join(d, fn)
+            if not os.path.isfile(fp):
+                continue
+            drop = (
+                fn.startswith('train_')
+                or fn.startswith('val_')
+                or fn.startswith('test_')
+                or (fn.startswith('model_') and name not in keep_names)
+            )
+            if drop:
+                try:
+                    os.remove(fp)
+                except OSError:
+                    pass
 
 
 def _grids_for_mode(grid_mode):
@@ -389,12 +455,7 @@ def work(p):
 
     torch.save(model.state_dict(), model_path)
     torch.save(model.state_dict(), '{}/model_{}'.format(path, disease))
-    np.save('{}/train_data_{}'.format(path, disease), X_train)
-    np.save('{}/train_label_{}'.format(path, disease), y_train)
-    np.save('{}/val_data_{}'.format(path, disease), X_val)
-    np.save('{}/val_label_{}'.format(path, disease), y_val)
-    np.save('{}/test_data_{}'.format(path, disease), X_test)
-    np.save('{}/test_label_{}'.format(path, disease), y_test)
+    # Skip omics dumps (huge on KIRC); evaluate rebuilds the test split.
     np.save('{}/loss'.format(path), loss_best)
     np.save('{}/eval_loss'.format(path), eval_best)
     with open('{}/train_flags.txt'.format(path), 'w') as f:
@@ -404,9 +465,11 @@ def work(p):
         f.write('lambda_recon={}\n'.format(lambda_recon))
         f.write('lambda_kl={}\n'.format(lambda_kl))
         f.write('lambda_ortho={}\n'.format(lambda_ortho))
+    prune_heavy_artifacts(use_orthogonal=use_orthogonal)
 
 
 def main(args):
+    configure_disease(args.disease)
     if args.summarize_only:
         summarize_runs(use_orthogonal=bool(args.use_orthogonal))
         return
@@ -425,8 +488,8 @@ def main(args):
     grids = _grids_for_mode(grid_mode)
 
     print(
-        'Fixed: lr={} wd={} K={} | use_orthogonal={} | grid={} | {} λ-config(s)'.format(
-            LR, WEIGHT_DECAY, K_GROUPS, use_orthogonal, grid_mode, len(grid)
+        'disease={} | Fixed: lr={} wd={} K={} | use_orthogonal={} | grid={} | {} λ-config(s)'.format(
+            disease, LR, WEIGHT_DECAY, K_GROUPS, use_orthogonal, grid_mode, len(grid)
         )
     )
     if grids is not None:
@@ -452,6 +515,13 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='OMIDIENT λ hyperparameter tuning')
+    parser.add_argument(
+        '--disease',
+        type=str,
+        default=disease,
+        choices=SUPPORTED_DISEASES,
+        help='Dataset key (results under results/models_{disease}_ProdGammaDirVae/)',
+    )
     parser.add_argument('--epochs', type=int, default=EPOCHS)
     parser.add_argument('--batch-size', type=int, default=BATCH_SIZE)
     parser.add_argument(
