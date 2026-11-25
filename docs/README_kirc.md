@@ -87,13 +87,11 @@ KIRC, single-seed loss winners. `gap S−PS` = mean(S) NMI − concat(P,S) NMI. 
 
 | Config | mean(S) NMI | concat(P) NMI | concat(P,S) NMI | gap S−PS | Δ X R² | X←S own | X←P own | X←[P;S] own | CKA |
 | ------ | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| MOCSS (AE) `0.0002_0.0007` | 0.2703 | 0.4574 | 0.4241 | −0.1538 | —† | —† | —† | —† | 0.7688 |
+| MOCSS (AE) `0.0002_0.0007` | 0.2703 | 0.4574 | 0.4241 | −0.1538 | −0.4171 | −4.5030 | −4.5062 | −7.8793 | 0.7688 |
 | M1 + `b_m` loss-best (a1.5 b0.7 g1.0 p1.0) | 0.1670 | 0.5397 | 0.5397 | −0.3727 | 5.2667 | −3.0302 | −5.7540 | −9.3258 | 0.5163 |
 | VICReg + `b_m` loss-best (a1.0 b0.5 v1.0 p1.0) | 0.4241 | 0.4574 | 0.5397 | −0.1156 | −7.1211 | −4.4135 | −1.5296 | −6.3479 | 0.7019 |
 | M2 loss-best (r1.0 c0.7 v0.5) | 0.2286 | 0.5916 | 0.5397 | −0.3111 | 2.1092 | −4.0204 | −5.0438 | −8.0652 | 0.6499 |
 | M3 spectral loss-best (s2 r1 c0) | 0.3236 | 0.0373 | 0.0373 | **+0.2863** | −5.5359 | −3.6087 | −2.2043 | −6.1630 | 0.2003 |
-
-†MOCSS end-of-train Ridge hit the raw high-dim path (astronomical R²). Recompute PCA-on-Y with `python -m multiomics.code.reeval_kirc_ridge --runs mocss` (no retrain).
 
 ---
 
@@ -119,7 +117,8 @@ Package: `code/ae/`. Results: `results/models_kirc_ae/`. Plain multi-omics contr
 | concat(P) | 0.4574 | 0.5129 | — | 0.8793 | 0.93 |
 | mean(S) | 0.2703 | 0.2090 | — | 0.7414 | 0.93 |
 
-Probes: subtype←S_other = 1.0000 | Ridge Δ / own-view → re-eval with PCA-on-Y (`--runs mocss`)  
+Probes: subtype←S_other = 1.0000 | X←S R² = −14.1497 | X←P R² = −13.7327 | Δ(S−P) = −0.4171  
+Own-view recon: X←S = −4.5030 | X←P = −4.5062 | X←[P;S] = −7.8793  
 Alignment: cosine = 0.0421 | CCA = 1.0000 | CKA = 0.7688
 
 ---
