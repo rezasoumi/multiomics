@@ -28,8 +28,9 @@ cd ${REPO}
 bash ${REPO}/setup_kirc_data.sh
 mkdir -p ${REPO}/logs ${REPO}/results
 
-# cwd under code/* so loading_data ../../data resolves
-cd ${REPO}/code
+# loading_data.py expects cwd under code/<pkg>/ (../../data → repo/data).
+# reeval_kirc_ridge.py also chdirs there; keep this as a safe default.
+cd ${REPO}/code/method1_predictability
 
 echo "=== Re-eval KIRC tops (Ridge PCA-on-Y fix) ==="
 python -u -m multiomics.code.reeval_kirc_ridge \

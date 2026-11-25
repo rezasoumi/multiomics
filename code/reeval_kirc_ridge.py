@@ -84,9 +84,25 @@ RIDGE_KEYS = [
 ]
 
 
-def _repo_results_root():
+def _repo_root():
     here = os.path.dirname(os.path.abspath(__file__))
-    return os.path.abspath(os.path.join(here, '..', 'results'))
+    return os.path.abspath(os.path.join(here, '..'))
+
+
+def _repo_results_root():
+    return os.path.join(_repo_root(), 'results')
+
+
+def _ensure_loading_data_cwd():
+    """loading_data.py uses ../../data relative to cwd — must be under code/<pkg>/."""
+    target = os.path.join(_repo_root(), 'code', 'method1_predictability')
+    data_probe = os.path.join(_repo_root(), 'data', 'KIRC', 'data', 'gene1.csv')
+    if not os.path.isfile(data_probe):
+        raise FileNotFoundError(
+            'KIRC omics missing at {}. Run setup_kirc_data.sh first.'.format(data_probe)
+        )
+    os.chdir(target)
+    print('cwd for load_data:', os.getcwd())
 
 
 def _evaluate(run):
@@ -124,6 +140,8 @@ def main(argv=None):
         help='Write JSON summary (default: results/kirc_ridge_reeval.json)',
     )
     args = parser.parse_args(argv)
+
+    _ensure_loading_data_cwd()
 
     if args.runs.strip().lower() in ('all', '*'):
         selected = KIRC_TOPS
