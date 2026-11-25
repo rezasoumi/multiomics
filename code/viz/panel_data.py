@@ -234,6 +234,22 @@ SWEEP_SPECS = [
 
 AE_PANEL_KIRC = [
     {
+        'label': 'MOCSS',
+        'short': 'MOCSS',
+        's_nmi': 0.2703,
+        'p_nmi': 0.4574,
+        'ps_nmi': 0.4241,
+        'gap_s_ps': 0.2703 - 0.4241,
+        # Ridge pending PCA re-eval (--runs mocss); NMI/CKA usable now
+        'delta_x_r2': None,
+        'x_s_own': None,
+        'x_p_own': None,
+        'x_ps_own': None,
+        'cka': 0.7688,
+        'probe_subtype': 1.0,
+        'family': 'ae',
+    },
+    {
         'label': 'M1 + b_m',
         'short': 'M1 + b_m',
         's_nmi': 0.1670,
@@ -359,6 +375,7 @@ OMI_PANEL_KIRC = [
 ]
 
 UMAP_JOBS_KIRC = [
+    ('mocss', '0.0002_0.0007', 'MOCSS'),
     ('method1', '0.0002_0.0007_a1.5_b0.7_g1.0_p1.0_l1.0', 'M1 + b_m'),
     ('method1_vicreg', '0.0002_0.0007_a1.0_b0.5_v1.0_p1.0_l1.0', 'VICReg + b_m'),
     ('method2', '0.0002_0.0007_r1.0_c0.7_v0.5', 'M2 (AE)'),

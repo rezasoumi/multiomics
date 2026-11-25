@@ -22,6 +22,13 @@ import sys
 # Top configs from docs/README_kirc.md (seed-21 loss winners).
 KIRC_TOPS = [
     {
+        'id': 'mocss',
+        'label': 'MOCSS (AE)',
+        'pkg': 'ae',
+        'results_subdir': 'models_kirc_ae',
+        'config': '0.0002_0.0007',
+    },
+    {
         'id': 'method1',
         'label': 'Method 1 + b_m',
         'pkg': 'method1_predictability',

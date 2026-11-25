@@ -4,7 +4,7 @@ Training and evaluation results for the methods in [`shared-representation-metho
 
 **Single-seed sweeps:** all tables below are **seed 21**, data splits fixed (`random_state=1`). No KIRC multi-seed summary yet (BRCA uses `results/multiseed/`). Optimizer defaults for KIRC sweeps: `lr=2e-4`, `wd=7e-4` (MOCSS-kirc style) for Methods 1–3 / Method 2+OMIDIENT; OMIDIENT keeps fixed `lr=3e-4`, `wd=5e-4`, `K=4`.
 
-**Not run on KIRC (yet):** Method 4 (invariant). **MOCSS (AE)** baseline: `sbatch run_mocss_kirc.slurm` → `results/models_kirc_ae/0.0002_0.0007/` (single published lr/wd). Compact AE panel currently lists M1 / VICReg / M2 / M3 until MOCSS finishes.
+**Not run on KIRC (yet):** Method 4 (invariant). **MOCSS (AE)** baseline is trained: `results/models_kirc_ae/0.0002_0.0007/` (`sbatch run_mocss_kirc.slurm`).
 
 **Private branch:** Method 1, VICReg, Method 2 use **MOCSS-style plain AE** for `P_m`. OMIDIENT uses product-Dirichlet private. Method 2 + OMIDIENT mixes Method-2 shared with Dirichlet private.
 
@@ -87,10 +87,13 @@ KIRC, single-seed loss winners. `gap S−PS` = mean(S) NMI − concat(P,S) NMI. 
 
 | Config | mean(S) NMI | concat(P) NMI | concat(P,S) NMI | gap S−PS | Δ X R² | X←S own | X←P own | X←[P;S] own | CKA |
 | ------ | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| MOCSS (AE) `0.0002_0.0007` | 0.2703 | 0.4574 | 0.4241 | −0.1538 | —† | —† | —† | —† | 0.7688 |
 | M1 + `b_m` loss-best (a1.5 b0.7 g1.0 p1.0) | 0.1670 | 0.5397 | 0.5397 | −0.3727 | 5.2667 | −3.0302 | −5.7540 | −9.3258 | 0.5163 |
 | VICReg + `b_m` loss-best (a1.0 b0.5 v1.0 p1.0) | 0.4241 | 0.4574 | 0.5397 | −0.1156 | −7.1211 | −4.4135 | −1.5296 | −6.3479 | 0.7019 |
 | M2 loss-best (r1.0 c0.7 v0.5) | 0.2286 | 0.5916 | 0.5397 | −0.3111 | 2.1092 | −4.0204 | −5.0438 | −8.0652 | 0.6499 |
 | M3 spectral loss-best (s2 r1 c0) | 0.3236 | 0.0373 | 0.0373 | **+0.2863** | −5.5359 | −3.6087 | −2.2043 | −6.1630 | 0.2003 |
+
+†MOCSS end-of-train Ridge hit the raw high-dim path (astronomical R²). Recompute PCA-on-Y with `python -m multiomics.code.reeval_kirc_ridge --runs mocss` (no retrain).
 
 ---
 
@@ -98,10 +101,26 @@ KIRC, single-seed loss winners. `gap S−PS` = mean(S) NMI − concat(P,S) NMI. 
 
 | Method | Best config | concat NMI | s_nmi | ARI | Acc | kNN | eval_loss |
 | ------ | ----------- | ---: | ---: | ---: | ---: | ---: | ---: |
+| MOCSS (AE) | `0.0002_0.0007` | 0.4241 | 0.2703 | 0.4644 | 0.8621 | 1.00 | — |
 | Method 1 (+`b_m`) | `0.0002_0.0007_a1.5_b0.7_g1.0_p1.0_l1.0` | 0.5397 | 0.1670 | 0.6224 | 0.9138 | 1.00 | 1.4426 |
 | Method 1 VICReg (+`b_m`) | `0.0002_0.0007_a1.0_b0.5_v1.0_p1.0_l1.0` | 0.5397 | 0.4241 | 0.6224 | 0.9138 | 1.00 | 1.3827 |
 | Method 2 | `0.0002_0.0007_r1.0_c0.7_v0.5` | 0.5397 | 0.2286 | 0.6224 | 0.9138 | 1.00 | 0.6671 |
 | Method 3 (spectral) | `0.0002_0.0007_s2.0_r1.0_c0.0_v0.1_vw0.5_lk0.5` | 0.0373 | 0.3236 | 0.0602 | 0.6552 | 1.00 | 0.3536 |
+
+---
+
+## Baseline: MOCSS (AE)
+
+Package: `code/ae/`. Results: `results/models_kirc_ae/`. Plain multi-omics contrastive shared–specific autoencoder (same private AE family as Method 1 / Method 2 AE). Config: `0.0002_0.0007` (KIRC published lr/wd).
+
+| | nmi | ari | f_score | acc | knn |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| concat(P,S) | 0.4241 | 0.4644 | 0.8271 | 0.8621 | 1.00 |
+| concat(P) | 0.4574 | 0.5129 | — | 0.8793 | 0.93 |
+| mean(S) | 0.2703 | 0.2090 | — | 0.7414 | 0.93 |
+
+Probes: subtype←S_other = 1.0000 | Ridge Δ / own-view → re-eval with PCA-on-Y (`--runs mocss`)  
+Alignment: cosine = 0.0421 | CCA = 1.0000 | CKA = 0.7688
 
 ---
 
@@ -328,8 +347,11 @@ Alignment: cosine = −0.1205 | CCA = 0.9342 | CKA = 0.5768
 
 Reading KIRC as a **2-class** shared/private problem (vs BRCA 5 subtypes). All numbers are single-seed (seed 21).
 
+**MOCSS — private steals shared (same story as BRCA).**  
+`concat(P) ≈ 0.46 > concat(P,S) ≈ 0.42 > mean(S) ≈ 0.27`, gap S−PS ≈ −0.15, strong CKA (0.77). Dual solo recon lets AE private absorb subtype signal.
+
 **AE-private methods collapse shared into private on the loss-best configs.**  
-M1 / VICReg / M2 loss-winners all hit the same ceiling `concat(P,S) NMI ≈ 0.54` with **high `concat(P)`** (0.46–0.59) and much **weaker `mean(S)`** (0.17–0.42). Gap S−PS is largely negative (−0.12 to −0.37): private is carrying the subtype signal that integration uses. VICReg is the least bad AE-private hygiene (`s_nmi` 0.42, CKA 0.70, gap −0.12).
+M1 / VICReg / M2 loss-winners all hit the same ceiling `concat(P,S) NMI ≈ 0.54` with **high `concat(P)`** (0.46–0.59) and much **weaker `mean(S)`** (0.17–0.42). Gap S−PS is largely negative (−0.12 to −0.37): private is carrying the subtype signal that integration uses. VICReg is the least bad AE-private hygiene (`s_nmi` 0.42, CKA 0.70, gap −0.12) and beats MOCSS on `mean(S)` / concat NMI.
 
 **Method 3 is the only AE-family method with S ≫ P.**  
 Loss-best M3 has `mean(S) NMI = 0.32` vs `concat(P) ≈ 0.04` and gap **+0.29**, but `concat(P,S)` collapses to ~0.04 (private dilutes) and CKA is weak (0.20). Spectral ceiling is low (`nmi_spectral_U = 0.15`), so the shared graph target itself is limited on this KIRC labeling.
