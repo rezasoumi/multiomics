@@ -161,8 +161,22 @@ def probe_subtype_from_S_other(shared_by_view, y):
     return out
 
 
+# When Y is wider than this, Ridge on raw features is ill-posed (n ≪ p),
+# especially on KIRC (~58k genes). Compress Y with train-only PCA first.
+RIDGE_Y_PCA_TRIGGER = 512
+RIDGE_Y_PCA_DIM = 50
+
+
 def _ridge_r2(X, Y):
-    """Train/test Ridge R² for multi-output regression Y ~ X."""
+    """Train/test Ridge R² for multi-output regression Y ~ X.
+
+    If ``Y`` has more than ``RIDGE_Y_PCA_TRIGGER`` features, fit PCA on the
+    train split (≤ ``RIDGE_Y_PCA_DIM`` comps) and score R² in that space.
+    Latents (X) are only standardized. This keeps BRCA small-view behaviour
+    and makes KIRC Δ X R² / own-view R² numerically meaningful.
+    """
+    from sklearn.decomposition import PCA
+
     n = X.shape[0]
     if n < 8:
         return 0.0
@@ -171,10 +185,20 @@ def _ridge_r2(X, Y):
     scaler_x = StandardScaler()
     X_tr = scaler_x.fit_transform(X[tr])
     X_te = scaler_x.transform(X[te])
-    # Standardize targets per feature for stabler multioutput R²
+
+    Y_tr = np.asarray(Y[tr], dtype=np.float64)
+    Y_te = np.asarray(Y[te], dtype=np.float64)
+    if Y_tr.shape[1] > RIDGE_Y_PCA_TRIGGER:
+        n_comp = int(min(RIDGE_Y_PCA_DIM, Y_tr.shape[0] - 1, Y_tr.shape[1]))
+        if n_comp < 1:
+            return 0.0
+        pca = PCA(n_components=n_comp, random_state=PROBE_RANDOM_STATE)
+        Y_tr = pca.fit_transform(Y_tr)
+        Y_te = pca.transform(Y_te)
+
     scaler_y = StandardScaler()
-    Y_tr = scaler_y.fit_transform(Y[tr])
-    Y_te = scaler_y.transform(Y[te])
+    Y_tr = scaler_y.fit_transform(Y_tr)
+    Y_te = scaler_y.transform(Y_te)
     model = Ridge(alpha=1.0)
     model.fit(X_tr, Y_tr)
     pred = model.predict(X_te)

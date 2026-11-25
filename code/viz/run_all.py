@@ -13,7 +13,8 @@ Examples (from anywhere, with PYTHONPATH set to the github parent):
   python -m multiomics.code.viz.run_all --mode sweeps
 
 Outputs:
-  docs/figures/*.png and *.pdf   (default)
+  docs/figures/*.png and *.pdf        (default for --disease brca)
+  docs/figures_kirc/*.png and *.pdf   (default for --disease kirc)
   Override with --out-dir
 """
 
@@ -24,14 +25,15 @@ import os
 import sys
 
 
-def default_out_dir():
+def default_out_dir(disease='brca'):
     here = os.path.dirname(os.path.abspath(__file__))
-    return os.path.abspath(os.path.join(here, '..', '..', 'docs', 'figures'))
+    folder = 'figures_kirc' if disease == 'kirc' else 'figures'
+    return os.path.abspath(os.path.join(here, '..', '..', 'docs', folder))
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(
-        description='Generate shared/private visualization figures for docs/README.md'
+        description='Generate shared/private visualization figures for docs/README*.md'
     )
     parser.add_argument(
         '--mode',
@@ -43,9 +45,9 @@ def main(argv=None):
         '--out-dir',
         type=str,
         default='',
-        help='Output directory (default: <repo>/docs/figures)',
+        help='Output directory (default: docs/figures or docs/figures_kirc)',
     )
-    parser.add_argument('--disease', type=str, default='brca')
+    parser.add_argument('--disease', type=str, default='brca', choices=['brca', 'kirc'])
     parser.add_argument(
         '--reduce',
         choices=['umap', 'tsne'],
@@ -63,22 +65,23 @@ def main(argv=None):
     if args.results_root:
         os.environ['MULTIOMICS_RESULTS'] = os.path.abspath(args.results_root)
 
-    out_dir = os.path.abspath(args.out_dir or default_out_dir())
+    out_dir = os.path.abspath(args.out_dir or default_out_dir(args.disease))
     os.makedirs(out_dir, exist_ok=True)
 
     # Import after env override so diagnose_shared_private picks it up
     from multiomics.code.viz import plots
 
     print('out_dir:', out_dir)
+    print('disease:', args.disease)
     if args.mode in ('readme', 'all'):
         print('--- figs 1–4 (README numbers) ---')
-        plots.plot_readme_only(out_dir)
+        plots.plot_readme_only(out_dir, disease=args.disease)
     if args.mode in ('umap', 'all'):
         print('--- fig 5 (embeddings) ---')
         plots.plot_umap(out_dir, disease=args.disease, reduce=args.reduce)
     if args.mode in ('sweeps', 'all'):
         print('--- fig 6 (sweep heatmaps) ---')
-        plots.plot_sweep_heatmaps(out_dir)
+        plots.plot_sweep_heatmaps(out_dir, disease=args.disease)
 
     print('\nDone. Figures are in:', out_dir)
     return 0

@@ -113,18 +113,24 @@ def load_latents(method, disease, config_dir):
     View sizes are inferred from the checkpoint; inputs come from test_data_*.npy.
     """
     model_path = os.path.join(config_dir, 'model_{}'.format(disease))
-    data_path = os.path.join(config_dir, 'test_data_{}.npy'.format(disease))
-    label_path = os.path.join(config_dir, 'test_label_{}.npy'.format(disease))
     if not os.path.isfile(model_path):
         raise FileNotFoundError(model_path)
-    if not os.path.isfile(data_path):
-        raise FileNotFoundError(data_path)
 
     state = torch.load(model_path, map_location='cpu')
     view_size = infer_view_sizes(method, state)
     d1, d2, d3 = view_size
-    data = np.load(data_path)
-    label = np.load(label_path, allow_pickle=True)
+    # Prefer saved test split; rebuild the same 80/20 split if dumps were pruned.
+    try:
+        from multiomics.code.loading_data import load_or_rebuild_test_split
+
+        data, label = load_or_rebuild_test_split(disease, config_dir)
+    except Exception:
+        data_path = os.path.join(config_dir, 'test_data_{}.npy'.format(disease))
+        label_path = os.path.join(config_dir, 'test_label_{}.npy'.format(disease))
+        if not os.path.isfile(data_path):
+            raise FileNotFoundError(data_path)
+        data = np.load(data_path)
+        label = np.load(label_path, allow_pickle=True)
     if data.shape[1] != d1 + d2 + d3:
         raise ValueError(
             'test_data width {} != sum(view_size) {} for {}'.format(

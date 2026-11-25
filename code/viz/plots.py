@@ -12,10 +12,10 @@ from matplotlib.colors import TwoSlopeNorm
 from matplotlib.patches import FancyArrowPatch, FancyBboxPatch
 
 from multiomics.code.viz.panel_data import (
-    AE_PANEL,
-    OMI_PANEL,
-    SWEEP_SPECS,
-    UMAP_JOBS,
+    get_ae_panel,
+    get_omi_panel,
+    get_sweep_specs,
+    get_umap_jobs,
 )
 from multiomics.code.viz.style import (
     COLOR_GRID,
@@ -49,11 +49,11 @@ def _save(fig, out_dir, stem):
 # Fig 1 — S / P / [P;S] NMI grouped bars
 # ---------------------------------------------------------------------------
 
-def plot_nmi_bars(out_dir):
+def plot_nmi_bars(out_dir, disease='brca'):
     apply_style()
     panels = [
-        ('AE-private methods', AE_PANEL, '01_nmi_bars_ae'),
-        ('Method 2 / OMIDIENT family', OMI_PANEL, '01_nmi_bars_omidient'),
+        ('AE-private methods', get_ae_panel(disease), '01_nmi_bars_ae'),
+        ('Method 2 / OMIDIENT family', get_omi_panel(disease), '01_nmi_bars_omidient'),
     ]
     paths = []
     for title, rows, stem in panels:
@@ -82,15 +82,22 @@ def plot_nmi_bars(out_dir):
 # Fig 2 — scatter: subtype separation vs Δ X R²
 # ---------------------------------------------------------------------------
 
-def plot_scatter(out_dir):
+def plot_scatter(out_dir, disease='brca'):
     apply_style()
-    rows = AE_PANEL + [r for r in OMI_PANEL if r['label'] != 'M2 (AE)']
+    ae = get_ae_panel(disease)
+    omi = get_omi_panel(disease)
+    rows = ae + [r for r in omi if r['label'] != 'M2 (AE)']
+    # KIRC Ridge Δ X R² is numerically unstable; use subtype←S_other instead.
+    use_probe = any(r.get('delta_x_r2') is None for r in rows)
     fig, ax = plt.subplots(figsize=(7.2, 5.6))
     for r in rows:
         sep = r['s_nmi'] - r['p_nmi']
+        y = r.get('probe_subtype') if use_probe else r['delta_x_r2']
+        if y is None:
+            continue
         ax.scatter(
             sep,
-            r['delta_x_r2'],
+            y,
             s=110,
             marker=METHOD_MARKERS.get(r['label'], 'o'),
             color=COLOR_S if r['family'] == 'ae' else COLOR_P,
@@ -101,16 +108,21 @@ def plot_scatter(out_dir):
         )
         ax.annotate(
             r['short'],
-            (sep, r['delta_x_r2']),
+            (sep, y),
             textcoords='offset points',
             xytext=(6, 5),
             fontsize=8,
         )
-    ax.axhline(0, color='#888888', lw=0.8, ls='--')
     ax.axvline(0, color='#888888', lw=0.8, ls='--')
+    if not use_probe:
+        ax.axhline(0, color='#888888', lw=0.8, ls='--')
     ax.set_xlabel('Subtype separation: mean(S) NMI − concat(P) NMI')
-    ax.set_ylabel('Cross-view reconstructiveness: Δ X R²  (S_other − P_other)')
-    ax.set_title('Decomposition axes: subtype coding ≠ reconstruction coding')
+    if use_probe:
+        ax.set_ylabel('Subtype ← S_other accuracy')
+        ax.set_title('KIRC: subtype separation vs shared probe accuracy')
+    else:
+        ax.set_ylabel('Cross-view reconstructiveness: Δ X R²  (S_other − P_other)')
+        ax.set_title('Decomposition axes: subtype coding ≠ reconstruction coding')
     ax.legend(frameon=False, loc='best', fontsize=8)
     ax.grid(True, color=COLOR_GRID, lw=0.6)
     return [_save(fig, out_dir, '02_scatter_separation_vs_delta_xr2')]
@@ -120,32 +132,46 @@ def plot_scatter(out_dir):
 # Fig 3 — color-coded metric heatmap (compact panel)
 # ---------------------------------------------------------------------------
 
-def plot_metric_heatmap(out_dir):
+def plot_metric_heatmap(out_dir, disease='brca'):
     apply_style()
     panels = [
-        ('AE-private compact panel', AE_PANEL, '03_metric_heatmap_ae'),
-        ('Method 2 / OMIDIENT family', OMI_PANEL, '03_metric_heatmap_omidient'),
+        ('AE-private compact panel', get_ae_panel(disease), '03_metric_heatmap_ae'),
+        ('Method 2 / OMIDIENT family', get_omi_panel(disease), '03_metric_heatmap_omidient'),
     ]
-    metric_keys = [
-        ('s_nmi', 'mean(S) NMI'),
-        ('p_nmi', 'concat(P) NMI'),
-        ('ps_nmi', 'concat(P,S) NMI'),
-        ('gap_s_ps', 'gap S−PS'),
-        ('delta_x_r2', 'Δ X R²'),
-        ('x_s_own', 'X←S own'),
-        ('x_p_own', 'X←P own'),
-        ('cka', 'CKA'),
-    ]
+    if disease == 'kirc':
+        metric_keys = [
+            ('s_nmi', 'mean(S) NMI'),
+            ('p_nmi', 'concat(P) NMI'),
+            ('ps_nmi', 'concat(P,S) NMI'),
+            ('gap_s_ps', 'gap S−PS'),
+            ('probe_subtype', 'subtype←S'),
+            ('cka', 'CKA'),
+        ]
+    else:
+        metric_keys = [
+            ('s_nmi', 'mean(S) NMI'),
+            ('p_nmi', 'concat(P) NMI'),
+            ('ps_nmi', 'concat(P,S) NMI'),
+            ('gap_s_ps', 'gap S−PS'),
+            ('delta_x_r2', 'Δ X R²'),
+            ('x_s_own', 'X←S own'),
+            ('x_p_own', 'X←P own'),
+            ('cka', 'CKA'),
+        ]
     diverging = {'gap_s_ps', 'delta_x_r2'}
     paths = []
     for title, rows, stem in panels:
-        mat = np.array([[r[k] for k, _ in metric_keys] for r in rows], dtype=float)
+        mat = np.array(
+            [[(np.nan if r.get(k) is None else r[k]) for k, _ in metric_keys] for r in rows],
+            dtype=float,
+        )
         fig, ax = plt.subplots(figsize=(10.5, 0.9 + 0.55 * len(rows)))
         # Draw column-by-column so diverging cols use a different cmap
         for j, (key, _) in enumerate(metric_keys):
             col = mat[:, j:j + 1]
             if key in diverging:
-                vmax = max(0.05, np.nanmax(np.abs(col)))
+                finite = col[np.isfinite(col)]
+                vmax = max(0.05, float(np.nanmax(np.abs(finite))) if finite.size else 0.05)
                 norm = TwoSlopeNorm(vmin=-vmax, vcenter=0.0, vmax=vmax)
                 ax.imshow(
                     col,
@@ -168,7 +194,8 @@ def plot_metric_heatmap(out_dir):
                 )
             for i in range(len(rows)):
                 val = mat[i, j]
-                ax.text(j, i, '{:.2f}'.format(val), ha='center', va='center', fontsize=8)
+                txt = '—' if not np.isfinite(val) else '{:.2f}'.format(val)
+                ax.text(j, i, txt, ha='center', va='center', fontsize=8)
         ax.set_xticks(range(len(metric_keys)))
         ax.set_xticklabels([lab for _, lab in metric_keys], rotation=30, ha='right')
         ax.set_yticks(range(len(rows)))
@@ -316,7 +343,7 @@ def plot_umap(out_dir, disease='brca', reduce='umap'):
     from multiomics.code.diagnose_shared_private import load_latents, METHOD_DIRS, RESULTS_ROOT
 
     jobs = []
-    for method, config, label in UMAP_JOBS:
+    for method, config, label in get_umap_jobs(disease):
         parent = os.path.join(RESULTS_ROOT, METHOD_DIRS[method].format(disease))
         config_dir = os.path.join(parent, config)
         if os.path.isdir(config_dir) and os.path.isfile(
@@ -373,7 +400,9 @@ def plot_umap(out_dir, disease='brca', reduce='umap'):
     if last_sc is not None:
         fig.colorbar(last_sc, ax=axes.ravel().tolist(), fraction=0.02, pad=0.01, label='subtype')
     fig.suptitle(
-        '{} of shared vs private latents (colored by BRCA subtype)'.format(used_name),
+        '{} of shared vs private latents (colored by {} label)'.format(
+            used_name, disease.upper()
+        ),
         fontsize=12,
         y=1.01,
     )
@@ -423,7 +452,7 @@ def _pivot(rows, x_key, y_key, z_key):
     return x_vals, y_vals, mat
 
 
-def plot_sweep_heatmaps(out_dir, results_root=None):
+def plot_sweep_heatmaps(out_dir, results_root=None, disease='brca'):
     apply_style()
     if results_root is None:
         from multiomics.code.diagnose_shared_private import RESULTS_ROOT
@@ -431,7 +460,7 @@ def plot_sweep_heatmaps(out_dir, results_root=None):
         results_root = RESULTS_ROOT
 
     paths = []
-    for spec in SWEEP_SPECS:
+    for spec in get_sweep_specs(disease):
         csv_path = os.path.join(results_root, spec['csv'])
         if not os.path.isfile(csv_path):
             print('SKIP sweep (missing CSV):', csv_path)
@@ -481,18 +510,18 @@ def plot_sweep_heatmaps(out_dir, results_root=None):
     return paths
 
 
-def plot_readme_only(out_dir):
+def plot_readme_only(out_dir, disease='brca'):
     """Figs 1–4: no checkpoints required."""
     paths = []
-    paths += plot_nmi_bars(out_dir)
-    paths += plot_scatter(out_dir)
-    paths += plot_metric_heatmap(out_dir)
+    paths += plot_nmi_bars(out_dir, disease=disease)
+    paths += plot_scatter(out_dir, disease=disease)
+    paths += plot_metric_heatmap(out_dir, disease=disease)
     paths += plot_schematic(out_dir)
     return paths
 
 
 def plot_all(out_dir, disease='brca', reduce='umap'):
-    paths = plot_readme_only(out_dir)
+    paths = plot_readme_only(out_dir, disease=disease)
     paths += plot_umap(out_dir, disease=disease, reduce=reduce)
-    paths += plot_sweep_heatmaps(out_dir)
+    paths += plot_sweep_heatmaps(out_dir, disease=disease)
     return paths

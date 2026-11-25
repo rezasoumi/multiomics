@@ -1,6 +1,6 @@
 # Shared Representation Training Results
 
-Training and evaluation results for the methods described in [`shared-representation-method.md`](./shared-representation-method.md). Metrics are reported on the BRCA multi-omics setting used in this repository.
+Training and evaluation results for the methods described in [`shared-representation-method.md`](./shared-representation-method.md). Metrics are reported on the BRCA multi-omics setting used in this repository. **KIRC counterpart:** [`README_kirc.md`](./README_kirc.md) (figures under [`figures_kirc/`](./figures_kirc/)).
 
 **Multi-seed (headline tables):** MOCSS, Method 1, Method 1 VICReg, Method 2 (incl. high-NMI), Method 3 (incl. high-NMI), Method 4, Method 2 + OMIDIENT private, and both OMIDIENT rows report **mean ± sample std** over training seeds `{21, 22, 23, 24, 25}` (n=5). Data splits stay fixed (`random_state=1`). Source: `results/multiseed/summary.json` (`run_multiseed.slurm` / `run_multiseed_m34.slurm`). Top-10 leaderboards and the without-`b_m` appendix remain **single-seed** (seed 21) unless noted.
 

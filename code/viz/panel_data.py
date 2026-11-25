@@ -226,3 +226,212 @@ SWEEP_SPECS = [
         'title': 'OMIDIENT + L_ortho: λ_ctr vs λ_ortho',
     },
 ]
+
+# ---------------------------------------------------------------------------
+# KIRC (single-seed seed-21 loss winners from docs/README_kirc.md)
+# Cross-view / own-view Ridge R² on raw high-dim KIRC features is numerically
+# unstable (astronomical negatives) — left as None and omitted from heatmaps.
+# ---------------------------------------------------------------------------
+
+AE_PANEL_KIRC = [
+    {
+        'label': 'M1 + b_m',
+        'short': 'M1 + b_m',
+        's_nmi': 0.1670,
+        'p_nmi': 0.5397,
+        'ps_nmi': 0.5397,
+        'gap_s_ps': 0.1670 - 0.5397,
+        'delta_x_r2': None,
+        'x_s_own': None,
+        'x_p_own': None,
+        'x_ps_own': None,
+        'cka': 0.5163,
+        'probe_subtype': 0.9556,
+        'family': 'ae',
+    },
+    {
+        'label': 'VICReg + b_m',
+        'short': 'VICReg + b_m',
+        's_nmi': 0.4241,
+        'p_nmi': 0.4574,
+        'ps_nmi': 0.5397,
+        'gap_s_ps': 0.4241 - 0.5397,
+        'delta_x_r2': None,
+        'x_s_own': None,
+        'x_p_own': None,
+        'x_ps_own': None,
+        'cka': 0.7019,
+        'probe_subtype': 1.0,
+        'family': 'ae',
+    },
+    {
+        'label': 'M2 (AE)',
+        'short': 'M2 (AE)',
+        's_nmi': 0.2286,
+        'p_nmi': 0.5916,
+        'ps_nmi': 0.5397,
+        'gap_s_ps': 0.2286 - 0.5397,
+        'delta_x_r2': None,
+        'x_s_own': None,
+        'x_p_own': None,
+        'x_ps_own': None,
+        'cka': 0.6499,
+        'probe_subtype': 1.0,
+        'family': 'ae',
+    },
+    {
+        'label': 'M3 spectral',
+        'short': 'M3 spectral',
+        's_nmi': 0.3236,
+        'p_nmi': 0.0373,
+        'ps_nmi': 0.0373,
+        'gap_s_ps': 0.3236 - 0.0373,
+        'delta_x_r2': None,
+        'x_s_own': None,
+        'x_p_own': None,
+        'x_ps_own': None,
+        'cka': 0.2003,
+        'probe_subtype': 1.0,
+        'family': 'ae',
+    },
+]
+
+OMI_PANEL_KIRC = [
+    {
+        'label': 'M2 (AE)',
+        'short': 'M2 (AE)',
+        's_nmi': 0.2286,
+        'p_nmi': 0.5916,
+        'ps_nmi': 0.5397,
+        'gap_s_ps': 0.2286 - 0.5397,
+        'delta_x_r2': None,
+        'x_s_own': None,
+        'x_p_own': None,
+        'x_ps_own': None,
+        'cka': 0.6499,
+        'probe_subtype': 1.0,
+        'family': 'omi',
+    },
+    {
+        'label': 'M2 + OMIDIENT P',
+        'short': 'M2+OMI P',
+        's_nmi': 0.2286,
+        'p_nmi': 0.0049,
+        'ps_nmi': 0.2286,
+        'gap_s_ps': 0.0,
+        'delta_x_r2': None,
+        'x_s_own': None,
+        'x_p_own': None,
+        'x_ps_own': None,
+        'cka': 0.5428,
+        'probe_subtype': 1.0,
+        'family': 'omi',
+    },
+    {
+        'label': 'OMIDIENT (no ortho)',
+        'short': 'OMI (no ortho)',
+        's_nmi': 0.4956,
+        'p_nmi': 0.0173,
+        'ps_nmi': 0.4956,
+        'gap_s_ps': 0.0,
+        'delta_x_r2': None,
+        'x_s_own': None,
+        'x_p_own': None,
+        'x_ps_own': None,
+        'cka': 0.6860,
+        'probe_subtype': 1.0,
+        'family': 'omi',
+    },
+    {
+        'label': 'OMIDIENT (+ortho)',
+        'short': 'OMI (+ortho)',
+        's_nmi': 0.4241,
+        'p_nmi': 0.0173,
+        'ps_nmi': 0.4241,
+        'gap_s_ps': 0.0,
+        'delta_x_r2': None,
+        'x_s_own': None,
+        'x_p_own': None,
+        'x_ps_own': None,
+        'cka': 0.5768,
+        'probe_subtype': 1.0,
+        'family': 'omi',
+    },
+]
+
+UMAP_JOBS_KIRC = [
+    ('method1', '0.0002_0.0007_a1.5_b0.7_g1.0_p1.0_l1.0', 'M1 + b_m'),
+    ('method1_vicreg', '0.0002_0.0007_a1.0_b0.5_v1.0_p1.0_l1.0', 'VICReg + b_m'),
+    ('method2', '0.0002_0.0007_r1.0_c0.7_v0.5', 'M2 (AE)'),
+    ('method3', '0.0002_0.0007_s2.0_r1.0_c0.0_v0.1_vw0.5_lk0.5', 'M3 spectral'),
+    ('method2_omidient', '0.0002_0.0007_r1.5_c0.5_v1.0_k4', 'M2 + OMIDIENT P'),
+    ('omidient', '0.0003_0.0005_4_c2_r1.5_k1', 'OMIDIENT (no ortho)'),
+    ('omidient', '0.0003_0.0005_4_ortho_c2_r1.5_k0.5_o0.5', 'OMIDIENT (+ortho)'),
+]
+
+SWEEP_SPECS_KIRC = [
+    {
+        'name': 'method1',
+        'csv': 'models_kirc_method1/leaderboard.csv',
+        'x': 'alpha',
+        'y': 'lambda_priv',
+        'filter_priv': True,
+        'title': 'KIRC Method 1 + b_m: α vs λ_priv',
+    },
+    {
+        'name': 'method1_vicreg',
+        'csv': 'models_kirc_method1_vicreg/leaderboard.csv',
+        'x': 'alpha',
+        'y': 'lambda_priv',
+        'filter_priv': True,
+        'title': 'KIRC VICReg + b_m: α vs λ_priv',
+    },
+    {
+        'name': 'method2',
+        'csv': 'models_kirc_method2/leaderboard.csv',
+        'x': 'lambda_rec',
+        'y': 'lambda_ctr',
+        'filter_priv': False,
+        'title': 'KIRC Method 2: λ_rec vs λ_ctr',
+    },
+    {
+        'name': 'method3',
+        'csv': 'models_kirc_method3/leaderboard.csv',
+        'x': 'lambda_spec',
+        'y': 'lambda_res',
+        'filter_priv': False,
+        'title': 'KIRC Method 3 spectral: λ_spec vs λ_res',
+    },
+    {
+        'name': 'method2_omidient',
+        'csv': 'models_kirc_method2_omidient/leaderboard.csv',
+        'x': 'lambda_rec',
+        'y': 'lambda_ctr',
+        'filter_priv': False,
+        'title': 'KIRC Method 2 + OMIDIENT P: λ_rec vs λ_ctr',
+    },
+    {
+        'name': 'omidient_ortho',
+        'csv': 'models_kirc_ProdGammaDirVae/leaderboard_ortho.csv',
+        'x': 'lambda_ctr',
+        'y': 'lambda_ortho',
+        'filter_priv': False,
+        'title': 'KIRC OMIDIENT + L_ortho: λ_ctr vs λ_ortho',
+    },
+]
+
+
+def get_ae_panel(disease='brca'):
+    return AE_PANEL_KIRC if disease == 'kirc' else AE_PANEL
+
+
+def get_omi_panel(disease='brca'):
+    return OMI_PANEL_KIRC if disease == 'kirc' else OMI_PANEL
+
+
+def get_umap_jobs(disease='brca'):
+    return UMAP_JOBS_KIRC if disease == 'kirc' else UMAP_JOBS
+
+
+def get_sweep_specs(disease='brca'):
+    return SWEEP_SPECS_KIRC if disease == 'kirc' else SWEEP_SPECS
