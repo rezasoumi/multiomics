@@ -162,7 +162,15 @@ def main(argv=None):
     out_path = args.out.strip() or os.path.join(_repo_results_root(), 'kirc_ridge_reeval.json')
     summary = {'note': 'Ridge Y PCA when dim>512 (see shared_rep_metrics._ridge_r2)', 'runs': {}}
 
-    print('Ridge fix: PCA target to ≤50 comps when Y width > 512')
+    import multiomics.code.shared_rep_metrics as srm
+
+    print(
+        'Ridge fix: PCA→≤{} comps when Y width > {} '
+        '(explosion |R²|>{} forces PCA)'.format(
+            srm.RIDGE_Y_PCA_DIM, srm.RIDGE_Y_PCA_TRIGGER, srm.RIDGE_R2_EXPLOSION
+        )
+    )
+    print('shared_rep_metrics file:', srm.__file__)
     print('Evaluating {} config(s)\n'.format(len(selected)))
 
     for run in selected:

@@ -161,19 +161,21 @@ def probe_subtype_from_S_other(shared_by_view, y):
     return out
 
 
-# Only compress extremely wide targets (KIRC-scale). BRCA views stay on the
-# original raw-feature Ridge path so published BRCA numbers remain comparable.
-RIDGE_Y_PCA_TRIGGER = 10000
+# Compress wide targets before Ridge. KIRC gene/methyl (~23–58k) must be
+# PCA'd or R² explodes (n ≪ p). Published BRCA README numbers were computed
+# historically and are not recomputed by this change.
+RIDGE_Y_PCA_TRIGGER = 512
 RIDGE_Y_PCA_DIM = 50
+# If |R²| exceeds this, force PCA even when under the width trigger.
+RIDGE_R2_EXPLOSION = 100.0
 
 
 def _ridge_r2(X, Y):
     """Train/test Ridge R² for multi-output regression Y ~ X.
 
-    Same probe as BRCA (StandardScaler + Ridge α=1). If ``Y`` is extremely
-    wide (width > ``RIDGE_Y_PCA_TRIGGER``, e.g. KIRC ~58k genes), fit PCA on
-    the train split (≤ ``RIDGE_Y_PCA_DIM`` comps) first so the regression is
-    numerically defined; BRCA-scale views are unchanged.
+    Same probe as BRCA (StandardScaler + Ridge α=1). When ``Y`` is wider than
+    ``RIDGE_Y_PCA_TRIGGER`` (or the first fit explodes), PCA-compress ``Y`` on
+    the train split to ≤ ``RIDGE_Y_PCA_DIM`` comps, then score R² in that space.
     """
     from sklearn.decomposition import PCA
 
@@ -182,30 +184,43 @@ def _ridge_r2(X, Y):
         return 0.0
     idx = np.arange(n)
     tr, te = train_test_split(idx, test_size=PROBE_TEST_SIZE, random_state=PROBE_RANDOM_STATE)
+
+    X_raw = np.nan_to_num(np.asarray(X, dtype=np.float64), nan=0.0, posinf=0.0, neginf=0.0)
+    Y_raw = np.nan_to_num(np.asarray(Y, dtype=np.float64), nan=0.0, posinf=0.0, neginf=0.0)
+
     scaler_x = StandardScaler()
-    X_tr = scaler_x.fit_transform(X[tr])
-    X_te = scaler_x.transform(X[te])
+    X_tr = scaler_x.fit_transform(X_raw[tr])
+    X_te = scaler_x.transform(X_raw[te])
 
-    Y_tr = np.asarray(Y[tr], dtype=np.float64)
-    Y_te = np.asarray(Y[te], dtype=np.float64)
-    if Y_tr.shape[1] > RIDGE_Y_PCA_TRIGGER:
-        n_comp = int(min(RIDGE_Y_PCA_DIM, Y_tr.shape[0] - 1, Y_tr.shape[1]))
-        if n_comp < 1:
+    def _score(use_pca):
+        Y_tr = Y_raw[tr]
+        Y_te = Y_raw[te]
+        if use_pca:
+            n_comp = int(min(RIDGE_Y_PCA_DIM, Y_tr.shape[0] - 1, Y_tr.shape[1]))
+            if n_comp < 1:
+                return 0.0
+            pca = PCA(n_components=n_comp, random_state=PROBE_RANDOM_STATE)
+            Y_tr = pca.fit_transform(Y_tr)
+            Y_te = pca.transform(Y_te)
+        scaler_y = StandardScaler()
+        Y_tr = scaler_y.fit_transform(Y_tr)
+        Y_te = scaler_y.transform(Y_te)
+        model = Ridge(alpha=1.0)
+        model.fit(X_tr, Y_tr)
+        pred = model.predict(X_te)
+        try:
+            return float(r2_score(Y_te, pred, multioutput='uniform_average'))
+        except Exception:
             return 0.0
-        pca = PCA(n_components=n_comp, random_state=PROBE_RANDOM_STATE)
-        Y_tr = pca.fit_transform(Y_tr)
-        Y_te = pca.transform(Y_te)
 
-    scaler_y = StandardScaler()
-    Y_tr = scaler_y.fit_transform(Y_tr)
-    Y_te = scaler_y.transform(Y_te)
-    model = Ridge(alpha=1.0)
-    model.fit(X_tr, Y_tr)
-    pred = model.predict(X_te)
-    try:
-        return float(r2_score(Y_te, pred, multioutput='uniform_average'))
-    except Exception:
+    # Prefer PCA whenever the target is wider than the trigger (KIRC-scale).
+    use_pca = Y_raw.shape[1] > RIDGE_Y_PCA_TRIGGER
+    r2 = _score(use_pca=use_pca)
+    if (not np.isfinite(r2)) or abs(r2) > RIDGE_R2_EXPLOSION:
+        r2 = _score(use_pca=True)
+    if (not np.isfinite(r2)) or abs(r2) > RIDGE_R2_EXPLOSION:
         return 0.0
+    return r2
 
 
 def probe_XA_from_other(views_by_id, shared_by_view, specific_by_view):
