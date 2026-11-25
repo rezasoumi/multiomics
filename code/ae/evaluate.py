@@ -15,7 +15,7 @@ import warnings
 import numpy as np
 import torch
 
-from multiomics.code.loading_data import load_data
+from multiomics.code.loading_data import load_data, load_or_rebuild_test_split
 from multiomics.code import util
 from multiomics.code.ae.mocss_original_refactored import (
     SharedAndSpecificEmbedding,
@@ -60,11 +60,7 @@ def evaluate_config(disease, config_dir, plot=False):
     num_clust = NUM_CLUST[disease]
     view1_data, view2_data, view3_data, _, _ = load_data(disease)
 
-    data = np.load(os.path.join(config_dir, 'test_data_{}.npy'.format(disease)))
-    label = np.load(
-        os.path.join(config_dir, 'test_label_{}.npy'.format(disease)),
-        allow_pickle=True,
-    )
+    data, label = load_or_rebuild_test_split(disease, config_dir)
 
     model = SharedAndSpecificEmbedding(
         view_size=[view1_data.shape[1], view2_data.shape[1], view3_data.shape[1]],

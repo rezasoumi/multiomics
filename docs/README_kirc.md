@@ -4,13 +4,13 @@ Training and evaluation results for the methods in [`shared-representation-metho
 
 **Single-seed sweeps:** all tables below are **seed 21**, data splits fixed (`random_state=1`). No KIRC multi-seed summary yet (BRCA uses `results/multiseed/`). Optimizer defaults for KIRC sweeps: `lr=2e-4`, `wd=7e-4` (MOCSS-kirc style) for Methods 1–3 / Method 2+OMIDIENT; OMIDIENT keeps fixed `lr=3e-4`, `wd=5e-4`, `K=4`.
 
-**Not run on KIRC (yet):** MOCSS (AE) baseline, Method 4 (invariant). Compact AE panel is therefore M1 / VICReg / M2 / M3 only.
+**Not run on KIRC (yet):** Method 4 (invariant). **MOCSS (AE)** baseline: `sbatch run_mocss_kirc.slurm` → `results/models_kirc_ae/0.0002_0.0007/` (single published lr/wd). Compact AE panel currently lists M1 / VICReg / M2 / M3 until MOCSS finishes.
 
 **Private branch:** Method 1, VICReg, Method 2 use **MOCSS-style plain AE** for `P_m`. OMIDIENT uses product-Dirichlet private. Method 2 + OMIDIENT mixes Method-2 shared with Dirichlet private.
 
 **Ranking:** same as BRCA — core validation loss (label-free). Method 1 / VICReg → `L_std + L_shared + L_priv + L_ctr` (`L_vic` excluded for VICReg). Method 2 / Method 2+OMIDIENT → `L_recon + L_ctr`. Method 3 → `L_spec + L_res + L_ctr`. OMIDIENT λ-sweep → `L_ctr + L_recon + KL`.
 
-**Note on Ridge R² (KIRC):** raw omics targets are huge (~58k genes), so Ridge on the full feature matrix was ill-posed (astronomical negative R² in the first sweep logs). **Fix:** `shared_rep_metrics._ridge_r2` now PCA-compresses \(Y\) to ≤50 comps when `Y` width > 512 (train-only), then scores R² in that space. BRCA views under the trigger are unchanged. Recompute tops only with `sbatch run_reeval_kirc_ridge.slurm` (no retraining) → `results/kirc_ridge_reeval.json`.
+**Note on Ridge R² (KIRC):** same probe as BRCA (Ridge α=1, same split). KIRC targets are ~58k-d, so without compression the regression is ill-posed; for width > 10k only we PCA \(Y\) to ≤50 comps (train-only) then score R² (`results/kirc_ridge_reeval.json`). **BRCA path is unchanged.** Absolute R² can still be largely negative — see Analysis. Prefer **Δ = R²(S)−R²(P)** for comparisons.
 
 **Shared-quality metrics** (same suite as BRCA; `code/shared_rep_metrics.py`):
 
@@ -27,7 +27,7 @@ Same color language as BRCA: blue = shared \(S\); orange = private \(P\); purple
 | # | File | What it shows | Needs checkpoints? |
 | - | ---- | ------------- | ------------------ |
 | 1 | [`figures_kirc/01_nmi_bars_ae.png`](./figures_kirc/01_nmi_bars_ae.png), [`01_nmi_bars_omidient.png`](./figures_kirc/01_nmi_bars_omidient.png) | mean(S) / concat(P) / concat(P,S) NMI | No |
-| 2 | [`figures_kirc/02_scatter_separation_vs_delta_xr2.png`](./figures_kirc/02_scatter_separation_vs_delta_xr2.png) | subtype sep vs subtype←S_other (R² unstable) | No |
+| 2 | [`figures_kirc/02_scatter_separation_vs_delta_xr2.png`](./figures_kirc/02_scatter_separation_vs_delta_xr2.png) | subtype sep vs Δ X R² (PCA-on-Y Ridge) | No |
 | 3 | [`figures_kirc/03_metric_heatmap_ae.png`](./figures_kirc/03_metric_heatmap_ae.png), [`03_metric_heatmap_omidient.png`](./figures_kirc/03_metric_heatmap_omidient.png) | compact metrics | No |
 | 4 | [`figures_kirc/04_method_schematic.png`](./figures_kirc/04_method_schematic.png) | process schematic | No |
 | 5 | [`figures_kirc/05_embedding_umap.png`](./figures_kirc/05_embedding_umap.png) | UMAP/t-SNE of mean(S) vs concat(P) | Yes |
@@ -58,7 +58,7 @@ python -m multiomics.code.viz.run_all --mode all --disease kirc --reduce umap
 
 ![NMI bars OMIDIENT family](./figures_kirc/01_nmi_bars_omidient.png)
 
-### Fig 2 — Separation vs subtype probe
+### Fig 2 — Separation vs Δ X R²
 
 ![Scatter](./figures_kirc/02_scatter_separation_vs_delta_xr2.png)
 
@@ -83,14 +83,14 @@ Generate on Triton with `sbatch run_viz_kirc.slurm`. After that:
 
 ## Compact comparison (AE private)
 
-KIRC, single-seed loss winners. `gap S−PS` = mean(S) NMI − concat(P,S) NMI. Δ X R² / own-view R² omitted (unstable on KIRC).
+KIRC, single-seed loss winners. `gap S−PS` = mean(S) NMI − concat(P,S) NMI. `Δ X R²` / own-view = Ridge on PCA(Y) (see note above).
 
-| Config | mean(S) NMI | concat(P) NMI | concat(P,S) NMI | gap S−PS | subtype←S | CKA |
-| ------ | ---: | ---: | ---: | ---: | ---: | ---: |
-| M1 + `b_m` loss-best (a1.5 b0.7 g1.0 p1.0) | 0.1670 | 0.5397 | 0.5397 | −0.3727 | 0.9556 | 0.5163 |
-| VICReg + `b_m` loss-best (a1.0 b0.5 v1.0 p1.0) | 0.4241 | 0.4574 | 0.5397 | −0.1156 | 1.0000 | 0.7019 |
-| M2 loss-best (r1.0 c0.7 v0.5) | 0.2286 | 0.5916 | 0.5397 | −0.3111 | 1.0000 | 0.6499 |
-| M3 spectral loss-best (s2 r1 c0) | 0.3236 | 0.0373 | 0.0373 | **+0.2863** | 1.0000 | 0.2003 |
+| Config | mean(S) NMI | concat(P) NMI | concat(P,S) NMI | gap S−PS | Δ X R² | X←S own | X←P own | X←[P;S] own | CKA |
+| ------ | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| M1 + `b_m` loss-best (a1.5 b0.7 g1.0 p1.0) | 0.1670 | 0.5397 | 0.5397 | −0.3727 | 5.2667 | −3.0302 | −5.7540 | −9.3258 | 0.5163 |
+| VICReg + `b_m` loss-best (a1.0 b0.5 v1.0 p1.0) | 0.4241 | 0.4574 | 0.5397 | −0.1156 | −7.1211 | −4.4135 | −1.5296 | −6.3479 | 0.7019 |
+| M2 loss-best (r1.0 c0.7 v0.5) | 0.2286 | 0.5916 | 0.5397 | −0.3111 | 2.1092 | −4.0204 | −5.0438 | −8.0652 | 0.6499 |
+| M3 spectral loss-best (s2 r1 c0) | 0.3236 | 0.0373 | 0.0373 | **+0.2863** | −5.5359 | −3.6087 | −2.2043 | −6.1630 | 0.2003 |
 
 ---
 
@@ -132,7 +132,8 @@ Package: `code/method1_predictability/`. Results: `results/models_kirc_method1/`
 | concat(P) | 0.5397 | 0.6224 | — | 0.9138 | 1.00 |
 | mean(S) | 0.1670 | 0.0161 | — | 0.5862 | 1.00 |
 
-Probes: subtype←S_other = 0.9556 | Ridge R² unstable (omit)  
+Probes: subtype←S_other = 0.9556 | X←S R² = −11.4012 | X←P R² = −16.6679 | Δ(S−P) = 5.2667  
+Own-view recon: X←S = −3.0302 | X←P = −5.7540 | X←[P;S] = −9.3258  
 Alignment: cosine = 0.0387 | CCA = 1.0000 | CKA = 0.5163
 
 ---
@@ -164,7 +165,8 @@ Package: `code/method1_vicreg_ablation/`. Results: `results/models_kirc_method1_
 | concat(P) | 0.4574 | 0.5129 | — | 0.8793 | 1.00 |
 | mean(S) | 0.4241 | 0.4644 | — | 0.8621 | 1.00 |
 
-Probes: subtype←S_other = 1.0000  
+Probes: subtype←S_other = 1.0000 | X←S R² = −12.8306 | X←P R² = −5.7094 | Δ(S−P) = −7.1211  
+Own-view recon: X←S = −4.4135 | X←P = −1.5296 | X←[P;S] = −6.3479  
 Alignment: cosine = −0.0562 | CCA = 0.9999 | CKA = 0.7019
 
 ---
@@ -196,7 +198,8 @@ Package: `code/method2_joint_vicreg/`. Results: `results/models_kirc_method2/`. 
 | concat(P) | 0.5916 | 0.6846 | — | 0.9310 | 1.00 |
 | mean(S) | 0.2286 | 0.1318 | — | 0.6897 | 1.00 |
 
-Probes: subtype←S_other = 1.0000  
+Probes: subtype←S_other = 1.0000 | X←S R² = −10.5279 | X←P R² = −12.6371 | Δ(S−P) = 2.1092  
+Own-view recon: X←S = −4.0204 | X←P = −5.0438 | X←[P;S] = −8.0652  
 Alignment: cosine = −0.0134 | CCA = 0.9999 | CKA = 0.6499
 
 ---
@@ -228,7 +231,8 @@ Package: `code/method3_spectral_graph/`. Results: `results/models_kirc_method3/`
 | concat(P) | 0.0373 | 0.0602 | — | 0.6552 | 1.00 |
 | mean(S) | 0.3236 | 0.3032 | — | 0.7931 | 1.00 |
 
-Probes: subtype←S_other = 1.0000  
+Probes: subtype←S_other = 1.0000 | X←S R² = −12.6560 | X←P R² = −7.1201 | Δ(S−P) = −5.5359  
+Own-view recon: X←S = −3.6087 | X←P = −2.2043 | X←[P;S] = −6.1630  
 Alignment: cosine = 0.0513 | CCA = 1.0000 | CKA = 0.2003  
 `nmi_spectral_U` = 0.1540
 
@@ -236,12 +240,12 @@ Alignment: cosine = 0.0513 | CCA = 1.0000 | CKA = 0.2003
 
 ## Method 2 / OMIDIENT family
 
-| Method | Best config | mean(S) NMI | concat(P) NMI | concat(P,S) NMI | subtype←S | CKA | eval_loss |
-| ------ | ----------- | ---: | ---: | ---: | ---: | ---: | ---: |
-| Method 2 (AE private) | `0.0002_0.0007_r1.0_c0.7_v0.5` | 0.2286 | 0.5916 | 0.5397 | 1.0000 | 0.6499 | 0.6671 |
-| Method 2 + OMIDIENT private | `0.0002_0.0007_r1.5_c0.5_v1.0_k4` | 0.2286 | 0.0049 | 0.2286 | 1.0000 | 0.5428 | 0.6729 |
-| OMIDIENT (no \(L_\mathrm{ortho}\)) | `0.0003_0.0005_4_c2_r1.5_k1` | 0.4956 | 0.0173 | 0.4956 | 1.0000 | 0.6860 | 1.2738 |
-| OMIDIENT (with \(L_\mathrm{ortho}\)) | `0.0003_0.0005_4_ortho_c2_r1.5_k0.5_o0.5` | 0.4241 | 0.0173 | 0.4241 | 1.0000 | 0.5768 | 1.2715 |
+| Method | Best config | mean(S) NMI | concat(P) NMI | concat(P,S) NMI | Δ X R² | X←S own | X←P own | X←[P;S] own | CKA | eval_loss |
+| ------ | ----------- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Method 2 (AE private) | `0.0002_0.0007_r1.0_c0.7_v0.5` | 0.2286 | 0.5916 | 0.5397 | 2.1092 | −4.0204 | −5.0438 | −8.0652 | 0.6499 | 0.6671 |
+| Method 2 + OMIDIENT private | `0.0002_0.0007_r1.5_c0.5_v1.0_k4` | 0.2286 | 0.0049 | 0.2286 | 9.2089 | −4.5302 | −16.5603 | −22.8330 | 0.5428 | 0.6729 |
+| OMIDIENT (no \(L_\mathrm{ortho}\)) | `0.0003_0.0005_4_c2_r1.5_k1` | 0.4956 | 0.0173 | 0.4956 | **19.2926** | −0.5494 | −16.2954 | −20.3786 | 0.6860 | 1.2738 |
+| OMIDIENT (with \(L_\mathrm{ortho}\)) | `0.0003_0.0005_4_ortho_c2_r1.5_k0.5_o0.5` | 0.4241 | 0.0173 | 0.4241 | 19.1091 | −0.5528 | −16.2955 | −20.4081 | 0.5768 | 1.2715 |
 
 ### Method 2 + OMIDIENT private — top 10
 
@@ -268,7 +272,8 @@ Package: `code/method2_omidient_private/`. Results: `results/models_kirc_method2
 | concat(P) | 0.0049 | −0.0109 | — | 0.5000 | 0.93 |
 | mean(S) | 0.2286 | 0.1318 | — | 0.6897 | 1.00 |
 
-Probes: subtype←S_other = 1.0000  
+Probes: subtype←S_other = 1.0000 | X←S R² = −11.8955 | X←P R² = −21.1045 | Δ(S−P) = 9.2089  
+Own-view recon: X←S = −4.5302 | X←P = −16.5603 | X←[P;S] = −22.8330  
 Alignment: cosine = −0.0167 | CCA = 1.0000 | CKA = 0.5428
 
 ### OMIDIENT (no \(L_\mathrm{ortho}\)) — λ coarse grid
@@ -291,7 +296,8 @@ Package: `code/prod_gamma_dirvae/`. Results: `results/models_kirc_ProdGammaDirVa
 | concat(P) | 0.0173 | −0.0230 | — | 0.5172 | 0.93 |
 | mean(S) | 0.4956 | 0.5654 | — | 0.8966 | 0.93 |
 
-Probes: subtype←S_other = 1.0000  
+Probes: subtype←S_other = 1.0000 | X←S R² = −2.0606 | X←P R² = −21.3531 | Δ(S−P) = 19.2926  
+Own-view recon: X←S = −0.5494 | X←P = −16.2954 | X←[P;S] = −20.3786  
 Alignment: cosine = −0.1082 | CCA = 0.9204 | CKA = 0.6860
 
 ### OMIDIENT (with \(L_\mathrm{ortho}\)) — λ coarse grid
@@ -312,7 +318,8 @@ Alignment: cosine = −0.1082 | CCA = 0.9204 | CKA = 0.6860
 | concat(P) | 0.0173 | −0.0230 | — | 0.5172 | 0.93 |
 | mean(S) | 0.4241 | 0.4644 | — | 0.8621 | 1.00 |
 
-Probes: subtype←S_other = 1.0000  
+Probes: subtype←S_other = 1.0000 | X←S R² = −2.2440 | X←P R² = −21.3531 | Δ(S−P) = 19.1091  
+Own-view recon: X←S = −0.5528 | X←P = −16.2955 | X←[P;S] = −20.4081  
 Alignment: cosine = −0.1205 | CCA = 0.9342 | CKA = 0.5768
 
 ---
@@ -327,8 +334,8 @@ M1 / VICReg / M2 loss-winners all hit the same ceiling `concat(P,S) NMI ≈ 0.54
 **Method 3 is the only AE-family method with S ≫ P.**  
 Loss-best M3 has `mean(S) NMI = 0.32` vs `concat(P) ≈ 0.04` and gap **+0.29**, but `concat(P,S)` collapses to ~0.04 (private dilutes) and CKA is weak (0.20). Spectral ceiling is low (`nmi_spectral_U = 0.15`), so the shared graph target itself is limited on this KIRC labeling.
 
-**Dirichlet private kills `concat(P)` NMI (as on BRCA).**  
-M2+OMIDIENT / OMIDIENT rows have `concat(P) NMI ≈ 0.00–0.02` while `mean(S)` carries the clustering (0.23–0.50). OMIDIENT no-ortho is the strongest shared clustering among KIRC runs (`s_nmi = ps_nmi = 0.50`, CKA 0.69). Ortho is slightly weaker on NMI/CKA but similar eval_loss.
+**Dirichlet private kills `concat(P)` NMI (as on BRCA) and shows the largest Δ X R².**  
+M2+OMIDIENT / OMIDIENT rows have `concat(P) NMI ≈ 0.00–0.02` while `mean(S)` carries the clustering (0.23–0.50). PCA-on-Y Ridge: OMIDIENT Δ ≈ **+19** (S≪0 but P≪S), with own-view X←P ≈ −16; AE-private Δ is smaller / mixed (+5 M1, −7 VICReg, +2 M2, −5.5 M3). OMIDIENT no-ortho is also the strongest shared clustering (`s_nmi = ps_nmi = 0.50`, CKA 0.69).
 
 **kNN = 1.00 is common** on this 2-class test split — treat it as a weak discriminator vs NMI/ARI/Acc.
 

@@ -138,26 +138,16 @@ def plot_metric_heatmap(out_dir, disease='brca'):
         ('AE-private compact panel', get_ae_panel(disease), '03_metric_heatmap_ae'),
         ('Method 2 / OMIDIENT family', get_omi_panel(disease), '03_metric_heatmap_omidient'),
     ]
-    if disease == 'kirc':
-        metric_keys = [
-            ('s_nmi', 'mean(S) NMI'),
-            ('p_nmi', 'concat(P) NMI'),
-            ('ps_nmi', 'concat(P,S) NMI'),
-            ('gap_s_ps', 'gap S−PS'),
-            ('probe_subtype', 'subtype←S'),
-            ('cka', 'CKA'),
-        ]
-    else:
-        metric_keys = [
-            ('s_nmi', 'mean(S) NMI'),
-            ('p_nmi', 'concat(P) NMI'),
-            ('ps_nmi', 'concat(P,S) NMI'),
-            ('gap_s_ps', 'gap S−PS'),
-            ('delta_x_r2', 'Δ X R²'),
-            ('x_s_own', 'X←S own'),
-            ('x_p_own', 'X←P own'),
-            ('cka', 'CKA'),
-        ]
+    metric_keys = [
+        ('s_nmi', 'mean(S) NMI'),
+        ('p_nmi', 'concat(P) NMI'),
+        ('ps_nmi', 'concat(P,S) NMI'),
+        ('gap_s_ps', 'gap S−PS'),
+        ('delta_x_r2', 'Δ X R²'),
+        ('x_s_own', 'X←S own'),
+        ('x_p_own', 'X←P own'),
+        ('cka', 'CKA'),
+    ]
     diverging = {'gap_s_ps', 'delta_x_r2'}
     paths = []
     for title, rows, stem in panels:

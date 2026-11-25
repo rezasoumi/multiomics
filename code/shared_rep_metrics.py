@@ -161,19 +161,19 @@ def probe_subtype_from_S_other(shared_by_view, y):
     return out
 
 
-# When Y is wider than this, Ridge on raw features is ill-posed (n ≪ p),
-# especially on KIRC (~58k genes). Compress Y with train-only PCA first.
-RIDGE_Y_PCA_TRIGGER = 512
+# Only compress extremely wide targets (KIRC-scale). BRCA views stay on the
+# original raw-feature Ridge path so published BRCA numbers remain comparable.
+RIDGE_Y_PCA_TRIGGER = 10000
 RIDGE_Y_PCA_DIM = 50
 
 
 def _ridge_r2(X, Y):
     """Train/test Ridge R² for multi-output regression Y ~ X.
 
-    If ``Y`` has more than ``RIDGE_Y_PCA_TRIGGER`` features, fit PCA on the
-    train split (≤ ``RIDGE_Y_PCA_DIM`` comps) and score R² in that space.
-    Latents (X) are only standardized. This keeps BRCA small-view behaviour
-    and makes KIRC Δ X R² / own-view R² numerically meaningful.
+    Same probe as BRCA (StandardScaler + Ridge α=1). If ``Y`` is extremely
+    wide (width > ``RIDGE_Y_PCA_TRIGGER``, e.g. KIRC ~58k genes), fit PCA on
+    the train split (≤ ``RIDGE_Y_PCA_DIM`` comps) first so the regression is
+    numerically defined; BRCA-scale views are unchanged.
     """
     from sklearn.decomposition import PCA
 
